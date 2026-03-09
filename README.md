@@ -1,16 +1,16 @@
-##🏭 Synthetic Document Factory (SDF) - Banking Domain
+## 🏭 Synthetic Document Factory (SDF) - Banking Domain
 Este repositorio contiene el sistema auxiliar Synthetic Document Factory (SDF).
 Nota Importante: Este sistema no es el proyecto central de tesis. Es una herramienta utilitaria diseñada para generar el corpus de datos sintéticos de alta fidelidad (RFPs, anexos técnicos, normativas, historiales de proyectos) necesario para poblar e inicializar el sistema GraphRAG (Grafo de Conocimiento + RAG) que conforma el núcleo de la tesis.
-##🎯 Propósito
+## 🎯 Propósito
 Los sistemas GraphRAG en el sector bancario requieren un volumen significativo de documentos interconectados para funcionar correctamente. Generar texto aleatorio con LLMs rompe la "integridad relacional" (ej. un RFP dice que el presupuesto es de $100k y su anexo dice $500k).
 SDF resuelve esto utilizando una arquitectura de "Entidad Primero" (Entity-First), anclando toda la generación de texto a una base de datos semilla para garantizar que las entidades ficticias (bancos, empleados, proyectos, leyes) mantengan consistencia estricta a través de cientos de documentos generados.
-##🏗️ Arquitectura del Sistema
+## 🏗️ Arquitectura del Sistema
 El sistema opera en 4 capas lógicas:
 Seed Database Layer (Capa Semilla): Base de datos relacional (SQLite) que actúa como la fuente de la verdad. Almacena las entidades bancarias y de proyectos base. Ningún LLM puede inventar una entidad que no exista aquí.
 Schema Generation Layer (Capa Estructural): Utiliza PydanticAI y modelos de razonamiento lógico (GPT-5.2 Pro) para generar el "esqueleto" estructurado del documento en JSON (ej. definiendo el índice y restricciones de un RFP).
 Prose Expansion Layer (Capa Narrativa): Un flujo de trabajo cíclico orquestado con LangGraph. Toma el esqueleto y utiliza Claude 3.7 Sonnet (en modo de pensamiento extendido) para redactar el contenido largo y técnico en Markdown. Incluye nodos de auditoría para evitar alucinaciones.
 Rendering Layer (Capa de Formateo): Convierte el Markdown resultante en PDFs corporativos de alta fidelidad utilizando Pandoc y WeasyPrint, inyectando metadatos XMP (Project IDs) críticos para la posterior ingestión en Neo4j/GraphRAG.
-##🛠️ Stack Tecnológico (Marzo 2026)
+## 🛠️ Stack Tecnológico (Marzo 2026)
 Lenguaje: Python 3.12+
 Orquestación y Estado: langgraph
 Validación y Tipado: pydantic-ai
@@ -49,7 +49,7 @@ Configura las variables de entorno. Copia el archivo de ejemplo y añade tus API
 cp .env.example .env
 
 Asegúrate de incluir ANTHROPIC_API_KEY y OPENAI_API_KEY.
-##🚀 Uso del Sistema
+## 🚀 Uso del Sistema
 1. Inicializar la Base de Datos Semilla
 Antes de generar documentos, debes poblar el universo ficticio:
 python scripts/seed_db.py
@@ -71,7 +71,7 @@ python main.py batch-generate --count 30 --output-dir ./output/batch_1
 
 
 Los documentos resultantes se guardarán en el directorio output/ en formatos .md y .pdf (este último con etiquetas XMP incrustadas).
-📁 Estructura del Proyecto
+## 📁 Estructura del Proyecto
 synthetic-document-factory/
 ├── config/                 # Configuraciones globales y prompts maestros
 ├── data/
@@ -92,5 +92,5 @@ synthetic-document-factory/
 └── requirements.txt
 
 
-##🔒 Consideraciones de Seguridad
+## 🔒 Consideraciones de Seguridad
 Dado que este sistema utiliza APIs comerciales, asegúrate de no subir el archivo .env al repositorio. Los datos generados son completamente sintéticos, por lo que no existen riesgos de exposición de PII (Información Personal Identificable) real del sector bancario.
