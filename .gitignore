@@ -1,8 +1,13 @@
 venv/
 *.pyc
-.venv
+.venv/
 .env
 .vscode/
+
+# Generated outputs
+output/*.pdf
+output/*.html
+data/seed.db
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

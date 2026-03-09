@@ -1,0 +1,25 @@
+# Synthetic Document Factory - Dependencies
+# Core LLM & AI
+pydantic-ai>=0.1.0
+langgraph>=0.2.0
+dspy>=2.5.0
+anthropic>=0.40.0
+openai>=1.60.0
+
+# Database
+sqlalchemy>=2.0.0
+
+# PDF Rendering
+weasyprint>=62.0
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic>=2.10.0
+
+# CLI
+typer>=0.12.0
+rich>=13.9.0
+
+# Testing
+pytest>=8.3.0
+pytest-asyncio>=0.24.0
