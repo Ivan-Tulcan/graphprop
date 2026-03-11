@@ -34,6 +34,7 @@ class DocumentType(str, Enum):
     MEETING_MINUTES = "meeting_minutes"
     TECHNICAL_ANNEX = "technical_annex"
     REGULATION_SUMMARY = "regulation_summary"
+    RFP_QA = "rfp_qa"
 
 
 class PersonnelRole(str, Enum):

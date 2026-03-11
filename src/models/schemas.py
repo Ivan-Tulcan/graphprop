@@ -136,6 +136,109 @@ class MeetingMinutesSkeleton(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Technical Annex Skeleton
+# ---------------------------------------------------------------------------
+
+
+class TechnicalAnnexSkeleton(BaseModel):
+    """JSON skeleton for a Technical Annex (specs/requirements detail attached to an RFP)."""
+    metadata: DocumentMetadata
+    scope_summary: list[str] = Field(
+        default_factory=list,
+        description="High-level summary of the annex scope (3-5 bullet points)",
+    )
+    technical_sections: list[SectionSkeleton] = Field(
+        default_factory=list,
+        description="Detailed technical requirement sections",
+    )
+    specifications: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="Key-value specification pairs (requirement name -> detail)",
+    )
+    architecture_notes: list[str] = Field(
+        default_factory=list,
+        description="Architecture constraints referencing the bank's actual stack",
+    )
+    integration_points: list[str] = Field(
+        default_factory=list,
+        description="Bank systems and external APIs that must be integrated",
+    )
+    non_functional_requirements: list[SectionSkeleton] = Field(
+        default_factory=list,
+        description="Performance, security, and scalability requirement sections",
+    )
+    acceptance_criteria: list[str] = Field(
+        default_factory=list,
+        description="Measurable criteria that must be met for delivery acceptance",
+    )
+    references: list[str] = Field(
+        default_factory=list,
+        description="Standards, regulations, and internal documents referenced",
+    )
+
+
+# ---------------------------------------------------------------------------
+# RFP Q&A Skeleton
+# ---------------------------------------------------------------------------
+
+
+class RFPQAItem(BaseModel):
+    """A single question-and-answer entry in the RFP Q&A table."""
+    question_number: str = Field(..., description="Sequential number, e.g. '1', '2'")
+    category: str = Field(
+        ...,
+        description=(
+            "Category of the question: Técnico, Legal, Financiero, Funcional, "
+            "Proceso, Arquitectura, Seguridad, or Otro"
+        ),
+    )
+    vendor_question: str = Field(
+        ...,
+        description="Question submitted by a competing vendor to clarify the RFP",
+    )
+    bank_answer: str = Field(
+        ...,
+        description="Official answer provided by the issuing bank",
+    )
+    answered_by: str = Field(
+        default="",
+        description="Full name or role of the bank representative who answered",
+    )
+
+
+class RFPQASkeleton(BaseModel):
+    """JSON skeleton for an RFP Questions and Answers document."""
+    metadata: DocumentMetadata
+    rfp_reference: str = Field(
+        ...,
+        description="Title or ID of the RFP this Q&A document refers to",
+    )
+    submission_context: str = Field(
+        ...,
+        description=(
+            "Brief context: purpose of the Q&A round, number of competing vendors, "
+            "scope of the technology project, and timeline context"
+        ),
+    )
+    qa_items: list[RFPQAItem] = Field(
+        default_factory=list,
+        description=(
+            "List of 15-25 Q&A pairs covering technical, legal, financial, functional, "
+            "and process aspects. Questions should reflect real vendor concerns about a "
+            "banking technology procurement project."
+        ),
+    )
+    clarification_notes: list[str] = Field(
+        default_factory=list,
+        description="General clarification notes that apply to the entire Q&A document",
+    )
+    response_deadline: str = Field(
+        default="",
+        description="Deadline for final proposal submission after Q&A is published (ISO date)",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Mapping: document type -> skeleton class
 # ---------------------------------------------------------------------------
 
@@ -143,4 +246,6 @@ SKELETON_MAP: dict[str, type[BaseModel]] = {
     "rfp": RFPSkeleton,
     "project_history": ProjectHistorySkeleton,
     "meeting_minutes": MeetingMinutesSkeleton,
+    "technical_annex": TechnicalAnnexSkeleton,
+    "rfp_qa": RFPQASkeleton,
 }

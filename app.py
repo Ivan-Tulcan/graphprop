@@ -278,6 +278,45 @@ def _ai_generate_section(bank: "BankEntity", profile: "BankProfile", section: st
 
 
 # ---------------------------------------------------------------------------
+# Document type metadata (shared between generation page and viewer)
+# ---------------------------------------------------------------------------
+
+_DOC_TYPE_META: dict[str, tuple[str, str, str]] = {
+    # key: (icon, label, description)
+    "rfp": (
+        "📝",
+        "RFP Principal",
+        "Solicitud de Propuestas principal del proyecto, incluyendo alcance, requisitos técnicos, "
+        "criterios de evaluación y condiciones contractuales.",
+    ),
+    "technical_annex": (
+        "📎",
+        "Anexo Técnico",
+        "Especificaciones técnicas detalladas, requisitos de integración, criterios de aceptación "
+        "y notas de arquitectura que complementan el RFP.",
+    ),
+    "meeting_minutes": (
+        "📋",
+        "Actas de Reunión",
+        "Minuta de la reunión de kickoff u otras sesiones del proyecto, con agenda, "
+        "acuerdos y compromisos adquiridos.",
+    ),
+    "rfp_qa": (
+        "❓",
+        "Preguntas y Respuestas de RFP",
+        "Tabla Q&A donde proveedores concursantes formularon preguntas sobre el RFP "
+        "y el banco proporcionó respuestas oficiales.",
+    ),
+    "project_history": (
+        "📊",
+        "Historial del Proyecto",
+        "Documentación histórica y de estado del proyecto, incluyendo fases, contribuciones "
+        "de stakeholders, riesgos y lecciones aprendidas.",
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
 # Sidebar navigation
 # ---------------------------------------------------------------------------
 
@@ -290,7 +329,8 @@ page = st.sidebar.radio(
         "📁 Proyectos",
         "👥 Personal",
         "📜 Regulaciones",
-        "📄 Documentos Generados",
+        "� Generar Documentos",
+        "�📄 Documentos Generados",
     ],
 )
 
@@ -1008,7 +1048,7 @@ elif page == "📊 Fuente de la Verdad":
                     "JSON del Perfil",
                     value=profile_json_str,
                     height=500,
-                    key="profile_json_editor",
+                    key=f"profile_json_editor_{selected_bank}",
                 )
                 if st.button("💾 Guardar JSON Editado"):
                     try:
@@ -1376,6 +1416,200 @@ elif page == "📜 Regulaciones":
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# PAGE: GENERAR DOCUMENTOS
+# ═══════════════════════════════════════════════════════════════════════════
+
+elif page == "🚀 Generar Documentos":
+    from datetime import datetime as _gen_dt
+    from src.workflow.generator import DocumentGenerator as _DocGen
+    from src.formatting.renderer import PDFRenderer as _PDFRenderer
+
+    st.header("🚀 Generar Documentación Completa de Proyecto")
+    st.caption(
+        "Genera el paquete completo de documentos para un proyecto: RFP, Anexo Técnico, "
+        "Actas de Reunión, Preguntas y Respuestas de RFP e Historial del Proyecto."
+    )
+
+    session = _get_db()
+    try:
+        _gen_banks = get_all_banks(session)
+        _gen_projects = get_all_projects(session)
+
+        if not _gen_banks:
+            st.warning("No hay bancos registrados. Crea uno en la sección Bancos.")
+        elif not _gen_projects:
+            st.warning("No hay proyectos registrados. Crea uno en la sección Proyectos.")
+        else:
+            _gen_bank_map = {b.bank_id: b.name for b in _gen_banks}
+
+            col_left, col_right = st.columns([3, 2])
+
+            with col_left:
+                st.subheader("⚙️ Configuración")
+
+                _sel_bank_id = st.selectbox(
+                    "Banco",
+                    [b.bank_id for b in _gen_banks],
+                    format_func=lambda x: f"{_gen_bank_map[x]} ({x})",
+                    key="gen_bank_sel",
+                )
+
+                _bank_projs = [p for p in _gen_projects if p.bank_id == _sel_bank_id]
+                if not _bank_projs:
+                    st.warning(
+                        "Este banco no tiene proyectos asignados. "
+                        "Crea uno en la sección Proyectos."
+                    )
+                else:
+                    _sel_proj = st.selectbox(
+                        "Proyecto",
+                        _bank_projs,
+                        format_func=lambda p: f"{p.project_id} — {p.name}",
+                        key="gen_proj_sel",
+                    )
+
+                    # Optional evolution event link
+                    _gen_profile = get_bank_profile(session, _sel_bank_id)
+                    if _gen_profile and _gen_profile.evolution_history:
+                        st.markdown("**Relacionar con hito de evolución (opcional)**")
+                        _use_evo = st.checkbox(
+                            "Asociar a un hito registrado en la Fuente de la Verdad",
+                            key="gen_use_evo",
+                        )
+                        if _use_evo:
+                            _sel_evo = st.selectbox(
+                                "Hito de Evolución",
+                                _gen_profile.evolution_history,
+                                format_func=lambda e: f"{e.event_date} — {e.title}",
+                                key="gen_evo_sel",
+                            )
+                            st.info(
+                                f"📌 **{_sel_evo.title}** ({_sel_evo.event_date})\n\n"
+                                f"{_sel_evo.description}"
+                            )
+
+                    st.divider()
+                    st.markdown("**Tipos de documento a generar**")
+
+                    _gen_row1, _gen_row2 = st.columns(2)
+                    _sel_types: list[str] = []
+                    for _gidx, (_gdt, (_gicon, _glabel, _gdesc)) in enumerate(
+                        _DOC_TYPE_META.items()
+                    ):
+                        with (_gen_row1 if _gidx % 2 == 0 else _gen_row2):
+                            if st.checkbox(
+                                f"{_gicon} {_glabel}",
+                                value=True,
+                                help=_gdesc,
+                                key=f"gentype_{_gdt}",
+                            ):
+                                _sel_types.append(_gdt)
+
+                    st.divider()
+
+                    if not _sel_types:
+                        st.warning("Selecciona al menos un tipo de documento.")
+                    else:
+                        _gen_btn = st.button(
+                            f"🚀 Generar {len(_sel_types)} documento"
+                            f"{'s' if len(_sel_types) != 1 else ''}",
+                            type="primary",
+                            use_container_width=True,
+                            key="gen_start_btn",
+                        )
+
+                        if _gen_btn:
+                            _gen_generator = _DocGen()
+                            _gen_renderer = _PDFRenderer()
+                            _gen_generated: list[tuple] = []
+
+                            _gen_progress = st.progress(
+                                0, text="Iniciando generación..."
+                            )
+                            _gen_results = st.container()
+
+                            for _gi, _gdt in enumerate(_sel_types):
+                                _gicon, _glabel, _ = _DOC_TYPE_META[_gdt]
+                                _gen_progress.progress(
+                                    int((_gi / len(_sel_types)) * 100),
+                                    text=(
+                                        f"Generando {_gicon} {_glabel} "
+                                        f"({_gi + 1}/{len(_sel_types)})..."
+                                    ),
+                                )
+                                try:
+                                    _res = _gen_generator.generate(
+                                        project_id=_sel_proj.project_id,
+                                        doc_type=_gdt,
+                                    )
+                                    _final_md = _res.get("final_markdown", "")
+                                    if not _final_md:
+                                        with _gen_results:
+                                            st.warning(
+                                                f"⚠️ **{_glabel}**: no se obtuvo contenido"
+                                            )
+                                        continue
+
+                                    _proj_data = _res.get("project", {})
+                                    _skel = _res.get("skeleton", {})
+                                    _xmp = {
+                                        "title": _skel.get("metadata", {}).get(
+                                            "title",
+                                            f"{_gdt}_{_sel_proj.project_id}",
+                                        ),
+                                        "document_type": _gdt,
+                                        "project_id": _sel_proj.project_id,
+                                        "bank_id": _proj_data.get(
+                                            "bank_id", _sel_bank_id
+                                        ),
+                                        "stakeholder_ids": _proj_data.get(
+                                            "stakeholder_ids", []
+                                        ),
+                                    }
+                                    _ts = _gen_dt.now().strftime("%Y%m%d_%H%M%S")
+                                    _fname = f"{_gdt}_{_sel_proj.project_id}_{_ts}"
+                                    _pdf = _gen_renderer.render(
+                                        markdown=_final_md,
+                                        filename=_fname,
+                                        metadata=_xmp,
+                                    )
+                                    _gen_generated.append((
+                                        _gdt,
+                                        _glabel,
+                                        _pdf,
+                                        _res.get("token_usage", {}),
+                                    ))
+                                    with _gen_results:
+                                        st.success(
+                                            f"✅ **{_gicon} {_glabel}** — `{_pdf.name}`"
+                                        )
+                                except Exception as _gexc:
+                                    with _gen_results:
+                                        st.error(f"❌ **{_glabel}**: {_gexc}")
+
+                            _gen_progress.progress(100, text="¡Generación completa!")
+
+                            if _gen_generated:
+                                _total_tok = sum(
+                                    g[3].get("total_tokens", 0)
+                                    for g in _gen_generated
+                                )
+                                st.success(
+                                    f"🎉 **{len(_gen_generated)} documento(s) generado(s)** — "
+                                    f"{_total_tok:,} tokens en total. "
+                                    "Revisa la sección **📄 Documentos Generados**."
+                                )
+
+            with col_right:
+                st.subheader("ℹ️ Guía de tipos de documento")
+                for _gdt, (_gicon, _glabel, _gdesc) in _DOC_TYPE_META.items():
+                    with st.expander(f"{_gicon} {_glabel}"):
+                        st.caption(_gdesc)
+    finally:
+        session.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # PAGE: DOCUMENTOS GENERADOS
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1429,12 +1663,10 @@ elif page == "📄 Documentos Generados":
         with col1:
             doc_types = sorted(set(d["doc_type"] for d in documents))
             type_labels = {
-                "rfp": "RFP (Solicitud de Propuestas)",
-                "project_history": "Historial de Proyecto",
-                "meeting_minutes": "Acta de Reunión",
-                "technical_annex": "Anexo Técnico",
-                "regulation_summary": "Resumen Regulatorio",
+                dt: lbl
+                for dt, (_, lbl, _desc) in _DOC_TYPE_META.items()
             }
+            type_labels["regulation_summary"] = "Resumen Regulatorio"
             filter_type = st.multiselect(
                 "Tipo de Documento",
                 options=doc_types,
@@ -1492,11 +1724,7 @@ elif page == "📄 Documentos Generados":
             st.warning("No se encontraron documentos con los filtros aplicados.")
         else:
             for doc in filtered:
-                type_icon = {
-                    "rfp": "📝",
-                    "project_history": "📊",
-                    "meeting_minutes": "📋",
-                }.get(doc["doc_type"], "📄")
+                type_icon = _DOC_TYPE_META.get(doc["doc_type"], ("📄", "", ""))[0]
 
                 with st.expander(
                     f"{type_icon} {doc['title'][:80]}  —  {doc['project_id']}  |  "

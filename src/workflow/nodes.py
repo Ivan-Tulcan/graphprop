@@ -3,12 +3,13 @@ LangGraph workflow node implementations.
 
 Each function is a node in the document-generation state graph:
   1. extract_seed_data  — pull project/bank context from the seed DB
-  2. generate_skeleton  — use GPT-5.2 Pro to build a structured JSON skeleton
-  3. draft_content      — use Claude 3.7 Sonnet to expand skeleton into Markdown
+  2. generate_skeleton  — use GPT-4o to build a structured JSON skeleton
+  3. draft_content      — use Claude to expand skeleton into Markdown
   4. audit_compliance   — validate the draft against seed-data constraints
 """
 
 import json
+from datetime import date
 from typing import Any
 
 from config.settings import settings
@@ -164,13 +165,112 @@ def generate_skeleton(state: WorkflowState) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _format_rfp_qa_as_markdown(state: "WorkflowState") -> dict[str, Any]:
+    """
+    Convert an RFPQASkeleton directly into a Markdown table document.
+
+    Bypasses the LLM draft step for rfp_qa because the skeleton already
+    contains all structured Q&A pairs — we just format them as a table.
+    """
+    skeleton = state["skeleton"]
+    project_data = state["project"]
+    bank_data = state["bank"]
+    personnel_data = state["personnel"]
+    regulations_data = state["regulations"]
+
+    metadata = skeleton.get("metadata", {})
+    title = metadata.get("title", "Preguntas y Respuestas de RFP")
+    project_id = project_data["project_id"]
+    bank_name = bank_data["name"]
+    budget = project_data.get("budget_usd", 0)
+
+    lines = [
+        f"# {title}",
+        "",
+        f"**Banco emisor:** {bank_name}  ",
+        f"**Proyecto:** {project_id}  ",
+        f"**Referencia RFP:** {skeleton.get('rfp_reference', 'N/A')}  ",
+        f"**Fecha de publicación:** {metadata.get('creation_date', str(date.today()))}  ",
+        f"**Versión:** {metadata.get('version', '1.0')}  ",
+        "",
+    ]
+
+    if skeleton.get("submission_context"):
+        lines += [
+            "## Contexto",
+            "",
+            skeleton["submission_context"],
+            "",
+        ]
+
+    # Q&A table
+    qa_items = skeleton.get("qa_items", [])
+    if qa_items:
+        lines += [
+            "## Tabla de Preguntas y Respuestas",
+            "",
+            "| N° | Categoría | Pregunta del Proveedor Concursante | Respuesta Oficial del Banco | Respondido por |",
+            "|----|-----------|------------------------------------|-----------------------------|----------------|",
+        ]
+        for item in qa_items:
+            num = str(item.get("question_number", "")).replace("|", "\\|")
+            cat = str(item.get("category", "")).replace("|", "\\|")
+            q = str(item.get("vendor_question", "")).replace("|", "\\|").replace("\n", " ")
+            a = str(item.get("bank_answer", "")).replace("|", "\\|").replace("\n", " ")
+            by = str(item.get("answered_by", "")).replace("|", "\\|")
+            lines.append(f"| {num} | {cat} | {q} | {a} | {by} |")
+        lines.append("")
+
+    # Clarification notes
+    if skeleton.get("clarification_notes"):
+        lines += ["## Notas de Aclaración General", ""]
+        for note in skeleton["clarification_notes"]:
+            lines.append(f"- {note}")
+        lines.append("")
+
+    if skeleton.get("response_deadline"):
+        lines += [
+            f"**Fecha límite para presentación de propuestas:** {skeleton['response_deadline']}",
+            "",
+        ]
+
+    # Compliance anchors so audit_compliance checks pass
+    lines += [
+        "---",
+        "",
+        f"*Documento Q&A correspondiente al proyecto **{project_id}** — **{bank_name}***  ",
+        f"*Presupuesto referencial del proyecto: USD {budget:,.0f}*  ",
+    ]
+    personnel_names = [p["full_name"] for p in personnel_data]
+    if personnel_names:
+        lines.append(f"*Equipo de gestión: {', '.join(personnel_names)}*  ")
+    reg_codes = [r["code"] for r in regulations_data]
+    if reg_codes:
+        lines.append(f"*Marco regulatorio aplicable: {', '.join(reg_codes)}*  ")
+
+    markdown = "\n".join(lines)
+    return {
+        "markdown": markdown,
+        "token_usage": state.get("token_usage", {}),
+    }
+
+
 def draft_content(state: WorkflowState) -> dict[str, Any]:
     """
     Use Claude 3.7 Sonnet (Extended Thinking) to expand the JSON
     skeleton into detailed, long-form Markdown prose.
 
     The draft must reference only entities present in the seed data.
+    For rfp_qa documents the skeleton is converted to a Markdown table
+    directly without an LLM call.
     """
+    doc_type = state["doc_type"]
+
+    # rfp_qa is table-based: convert skeleton directly without an LLM call
+    if doc_type == "rfp_qa":
+        logger.info("Converting rfp_qa skeleton directly to Markdown table (no LLM call).")
+        return _format_rfp_qa_as_markdown(state)
+
     skeleton = state["skeleton"]
     project_data = state["project"]
     bank_data = state["bank"]

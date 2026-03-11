@@ -83,7 +83,7 @@ def generate(
     ))
 
     # Validate doc_type
-    valid_types = ["rfp", "project_history", "meeting_minutes"]
+    valid_types = ["rfp", "project_history", "meeting_minutes", "technical_annex", "rfp_qa"]
     if doc_type not in valid_types:
         console.print(
             f"[red]Error:[/red] Invalid doc-type '{doc_type}'. "
