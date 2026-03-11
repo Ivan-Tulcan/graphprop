@@ -15,6 +15,7 @@ from config.settings import settings
 from src.database.models import get_session
 from src.database.repository import (
     get_bank_by_id,
+    get_bank_profile,
     get_personnel_by_ids,
     get_project_by_id,
     get_regulations_for_bank,
@@ -55,15 +56,18 @@ def extract_seed_data(state: WorkflowState) -> dict[str, Any]:
 
         personnel = get_personnel_by_ids(session, project.stakeholder_ids)
         regulations = get_regulations_for_bank(session, project.bank_id)
+        bank_profile = get_bank_profile(session, project.bank_id)
 
         logger.info(
-            "Seed data extracted: bank=%s, personnel=%d, regulations=%d",
+            "Seed data extracted: bank=%s, personnel=%d, regulations=%d, profile=%s",
             bank.bank_id, len(personnel), len(regulations),
+            "yes" if bank_profile else "no",
         )
 
         return {
             "project": project.model_dump(mode="json"),
             "bank": bank.model_dump(mode="json"),
+            "bank_profile": bank_profile.model_dump(mode="json") if bank_profile else {},
             "personnel": [p.model_dump(mode="json") for p in personnel],
             "regulations": [r.model_dump(mode="json") for r in regulations],
         }
@@ -87,6 +91,7 @@ def generate_skeleton(state: WorkflowState) -> dict[str, Any]:
     doc_type = state["doc_type"]
     project_data = state["project"]
     bank_data = state["bank"]
+    bank_profile_data = state.get("bank_profile", {})
     personnel_data = state["personnel"]
     regulations_data = state["regulations"]
 
@@ -104,17 +109,29 @@ def generate_skeleton(state: WorkflowState) -> dict[str, Any]:
         "IDs, fechas ni cifras presupuestarias que no estén en los datos semilla.\n\n"
         "IMPORTANTE: Todos los textos dentro del JSON (títulos, secciones, puntos clave, "
         "restricciones, criterios) deben estar escritos en ESPAÑOL.\n\n"
+        "Considera la FUENTE DE LA VERDAD del banco (perfil institucional, stack tecnológico, "
+        "arquitectura, canales, procesos, historial de evolución) para contextualizar "
+        "correctamente el documento.\n\n"
         f"Tipo de documento: {doc_type}\n"
         f"Esquema (Pydantic): {json.dumps(schema_class.model_json_schema(), indent=2)}"
     )
+
+    # Build bank profile context block
+    profile_block = ""
+    if bank_profile_data:
+        profile_block = (
+            f"\n\n**Perfil del Banco (Fuente de la Verdad):**\n"
+            f"```json\n{json.dumps(bank_profile_data, indent=2, default=str, ensure_ascii=False)}\n```\n"
+        )
 
     user_prompt = (
         "Genera el esqueleto JSON usando estos datos semilla:\n\n"
         f"**Banco:**\n```json\n{json.dumps(bank_data, indent=2, default=str)}\n```\n\n"
         f"**Proyecto:**\n```json\n{json.dumps(project_data, indent=2, default=str)}\n```\n\n"
         f"**Personal:**\n```json\n{json.dumps(personnel_data, indent=2, default=str)}\n```\n\n"
-        f"**Regulaciones:**\n```json\n{json.dumps(regulations_data, indent=2, default=str)}\n```\n\n"
-        "Devuelve ÚNICAMENTE el objeto JSON válido, sin bloques markdown ni comentarios."
+        f"**Regulaciones:**\n```json\n{json.dumps(regulations_data, indent=2, default=str)}\n```"
+        + profile_block +
+        "\nDevuelve ÚNICAMENTE el objeto JSON válido, sin bloques markdown ni comentarios."
     )
 
     client = get_llm_client("openai")
@@ -157,6 +174,7 @@ def draft_content(state: WorkflowState) -> dict[str, Any]:
     skeleton = state["skeleton"]
     project_data = state["project"]
     bank_data = state["bank"]
+    bank_profile_data = state.get("bank_profile", {})
     personnel_data = state["personnel"]
     doc_type = state["doc_type"]
     audit_issues = state.get("audit_issues", [])
@@ -184,15 +202,27 @@ def draft_content(state: WorkflowState) -> dict[str, Any]:
         "5. Usa formato Markdown correcto con encabezados, listas y tablas.\n"
         "6. Cada sección debe ser sustancial (200-400 palabras).\n"
         "7. Incluye un encabezado con metadatos (título, ID de proyecto, fecha).\n"
-        "8. TODO el documento debe estar escrito en ESPAÑOL."
+        "8. TODO el documento debe estar escrito en ESPAÑOL.\n"
+        "9. Si se proporciona el perfil del banco (fuente de la verdad), úsalo para "
+        "   contextualizar el documento con información real sobre la arquitectura, "
+        "   stack tecnológico, canales, procesos y evolución del banco."
     )
+
+    # Build bank profile context for draft
+    profile_block = ""
+    if bank_profile_data:
+        profile_block = (
+            f"\n\n**Perfil del Banco (Fuente de la Verdad):**\n"
+            f"```json\n{json.dumps(bank_profile_data, indent=2, default=str, ensure_ascii=False)}\n```"
+        )
 
     user_prompt = (
         f"**Esqueleto del documento:**\n```json\n{json.dumps(skeleton, indent=2, default=str)}\n```\n\n"
         f"**Contexto del banco:**\n```json\n{json.dumps(bank_data, indent=2, default=str)}\n```\n\n"
         f"**Contexto del proyecto:**\n```json\n{json.dumps(project_data, indent=2, default=str)}\n```\n\n"
-        f"**Personal:**\n```json\n{json.dumps(personnel_data, indent=2, default=str)}\n```\n\n"
-        "Redacta el documento Markdown completo ahora. Responde ÚNICAMENTE con el contenido Markdown en español."
+        f"**Personal:**\n```json\n{json.dumps(personnel_data, indent=2, default=str)}\n```"
+        + profile_block +
+        "\n\nRedacta el documento Markdown completo ahora. Responde ÚNICAMENTE con el contenido Markdown en español."
         + revision_note
     )
 

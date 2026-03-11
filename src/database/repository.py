@@ -11,6 +11,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from src.database.models import (
+    BankProfileRow,
     BankRow,
     PersonnelRow,
     ProjectRow,
@@ -19,6 +20,7 @@ from src.database.models import (
 )
 from src.models.entities import (
     BankEntity,
+    BankProfile,
     PersonnelEntity,
     ProjectEntity,
     RegulationEntity,
@@ -234,3 +236,32 @@ def get_all_regulations(session: Session) -> list[RegulationEntity]:
         )
         for r in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# Bank Profile (Source of Truth) helpers
+# ---------------------------------------------------------------------------
+
+
+def upsert_bank_profile(session: Session, profile: BankProfile) -> None:
+    """Insert or update a BankProfile in the database."""
+    session.merge(BankProfileRow(
+        bank_id=profile.bank_id,
+        profile_json=profile.model_dump_json(),
+    ))
+
+
+def get_bank_profile(session: Session, bank_id: str) -> BankProfile | None:
+    """Return the BankProfile for a given bank, or None."""
+    row = session.query(BankProfileRow).filter_by(bank_id=bank_id).first()
+    if row is None:
+        return None
+    return BankProfile.model_validate_json(row.profile_json)
+
+
+def delete_bank_profile(session: Session, bank_id: str) -> None:
+    """Delete a bank profile by bank_id."""
+    row = session.query(BankProfileRow).filter_by(bank_id=bank_id).first()
+    if row:
+        session.delete(row)
+        session.commit()

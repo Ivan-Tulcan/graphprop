@@ -22,6 +22,7 @@ class WorkflowState(TypedDict, total=False):
     # --- Seed data (populated by extract_seed_data) ---
     project: dict[str, Any]
     bank: dict[str, Any]
+    bank_profile: dict[str, Any]
     personnel: list[dict[str, Any]]
     regulations: list[dict[str, Any]]
 

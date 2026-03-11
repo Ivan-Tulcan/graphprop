@@ -101,6 +101,14 @@ class RegulationRow(Base):
     applicable_bank_ids = Column(Text, nullable=False, default="[]")
 
 
+class BankProfileRow(Base):
+    """Stores the full 'Source of Truth' JSON document for each bank."""
+    __tablename__ = "bank_profiles"
+
+    bank_id = Column(String, primary_key=True)
+    profile_json = Column(Text, nullable=False, default="{}")
+
+
 # ---------------------------------------------------------------------------
 # Helper: create all tables
 # ---------------------------------------------------------------------------

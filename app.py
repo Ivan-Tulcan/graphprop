@@ -37,13 +37,17 @@ from src.database.repository import (
     get_all_projects,
     get_all_regulations,
     get_bank_by_id,
+    get_bank_profile,
     insert_bank,
     insert_personnel,
     insert_project,
     insert_regulation,
+    upsert_bank_profile,
 )
 from src.models.entities import (
     BankEntity,
+    BankProfile,
+    EvolutionEvent,
     PersonnelEntity,
     PersonnelRole,
     ProjectEntity,
@@ -124,7 +128,8 @@ page = st.sidebar.radio(
     "Navegación",
     [
         "🏢 Bancos",
-        "📁 Proyectos",
+        "� Fuente de la Verdad",
+        "�📁 Proyectos",
         "👥 Personal",
         "📜 Regulaciones",
         "📄 Documentos Generados",
@@ -230,8 +235,333 @@ if page == "🏢 Bancos":
         session.close()
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# PAGE: PROYECTOS
+# ═══════════════════════════════════════════════════════════════════════════# PAGE: FUENTE DE LA VERDAD
+# ═══════════════════════════════════════════════════════════════════════
+
+elif page == "📊 Fuente de la Verdad":
+    st.header("📊 Fuente de la Verdad — Perfil Institucional")
+    session = _get_db()
+
+    try:
+        banks = get_all_banks(session)
+
+        if not banks:
+            st.warning("No hay bancos registrados. Primero crea un banco en la pestaña Bancos.")
+        else:
+            bank_map = {b.bank_id: b.name for b in banks}
+            selected_bank = st.selectbox(
+                "Seleccionar Banco",
+                options=[b.bank_id for b in banks],
+                format_func=lambda x: f"{bank_map[x]} ({x})",
+                key="profile_bank_select",
+            )
+
+            # Load existing profile or create empty
+            profile = get_bank_profile(session, selected_bank)
+            if profile is None:
+                profile = BankProfile(bank_id=selected_bank)
+                st.info("Este banco aún no tiene perfil. Completa los campos y guarda.")
+
+            # ---- TABS for structured sections ----
+            tab_strategy, tab_processes, tab_tech, tab_arch, tab_channels, tab_org, tab_history, tab_extra, tab_json = st.tabs([
+                "🎯 Estrategia",
+                "⚙️ Procesos",
+                "💻 Tecnología",
+                "🏗️ Arquitectura",
+                "📡 Canales",
+                "🏢 Organización",
+                "📈 Evolución",
+                "📝 Contexto Adicional",
+                "🔧 JSON Completo",
+            ])
+
+            # ---- TAB: Estrategia ----
+            with tab_strategy:
+                st.subheader("🎯 Estrategia y Visión")
+                with st.form("profile_strategy", clear_on_submit=False):
+                    p_mission = st.text_area("Misión", value=profile.mission, height=80)
+                    p_vision = st.text_area("Visión", value=profile.vision, height=80)
+                    p_objectives = st.text_area(
+                        "Objetivos Estratégicos (uno por línea)",
+                        value="\n".join(profile.strategic_objectives),
+                        height=120,
+                    )
+                    p_advantages = st.text_area(
+                        "Ventajas Competitivas (una por línea)",
+                        value="\n".join(profile.competitive_advantages),
+                        height=100,
+                    )
+                    if st.form_submit_button("💾 Guardar Estrategia"):
+                        profile.mission = p_mission
+                        profile.vision = p_vision
+                        profile.strategic_objectives = [x.strip() for x in p_objectives.strip().splitlines() if x.strip()]
+                        profile.competitive_advantages = [x.strip() for x in p_advantages.strip().splitlines() if x.strip()]
+                        upsert_bank_profile(session, profile)
+                        session.commit()
+                        st.success("Estrategia guardada.")
+                        st.rerun()
+
+            # ---- TAB: Procesos ----
+            with tab_processes:
+                st.subheader("⚙️ Procesos de Negocio")
+                with st.form("profile_processes", clear_on_submit=False):
+                    p_core = st.text_area(
+                        "Procesos Core (uno por línea)",
+                        value="\n".join(profile.core_processes),
+                        height=120,
+                        help="Ej: Captaciones, Colocaciones, Pagos, Comercio Exterior, Tesorería",
+                    )
+                    p_support = st.text_area(
+                        "Procesos de Soporte (uno por línea)",
+                        value="\n".join(profile.support_processes),
+                        height=120,
+                        help="Ej: Recursos Humanos, Legal, Compliance, Auditoría Interna",
+                    )
+                    if st.form_submit_button("💾 Guardar Procesos"):
+                        profile.core_processes = [x.strip() for x in p_core.strip().splitlines() if x.strip()]
+                        profile.support_processes = [x.strip() for x in p_support.strip().splitlines() if x.strip()]
+                        upsert_bank_profile(session, profile)
+                        session.commit()
+                        st.success("Procesos guardados.")
+                        st.rerun()
+
+            # ---- TAB: Tecnología ----
+            with tab_tech:
+                st.subheader("💻 Stack Tecnológico")
+                with st.form("profile_tech", clear_on_submit=False):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        p_core_sys = st.text_input("Core Bancario", value=profile.core_banking_system, help="Ej: Temenos T24, Finacle, Cobis")
+                        p_langs = st.text_area("Lenguajes de Programación (uno por línea)", value="\n".join(profile.programming_languages), height=80)
+                        p_dbs = st.text_area("Bases de Datos (una por línea)", value="\n".join(profile.databases), height=80)
+                        p_cloud = st.text_area("Proveedores Cloud (uno por línea)", value="\n".join(profile.cloud_providers), height=60)
+                    with col2:
+                        p_devops = st.text_area("Herramientas DevOps (una por línea)", value="\n".join(profile.devops_tools), height=80)
+                        p_integration = st.text_area("Middleware/Integración (uno por línea)", value="\n".join(profile.integration_middleware), height=80)
+                        p_security = st.text_area("Stack de Seguridad (uno por línea)", value="\n".join(profile.security_stack), height=80)
+                    if st.form_submit_button("💾 Guardar Tecnología"):
+                        profile.core_banking_system = p_core_sys
+                        profile.programming_languages = [x.strip() for x in p_langs.strip().splitlines() if x.strip()]
+                        profile.databases = [x.strip() for x in p_dbs.strip().splitlines() if x.strip()]
+                        profile.cloud_providers = [x.strip() for x in p_cloud.strip().splitlines() if x.strip()]
+                        profile.devops_tools = [x.strip() for x in p_devops.strip().splitlines() if x.strip()]
+                        profile.integration_middleware = [x.strip() for x in p_integration.strip().splitlines() if x.strip()]
+                        profile.security_stack = [x.strip() for x in p_security.strip().splitlines() if x.strip()]
+                        upsert_bank_profile(session, profile)
+                        session.commit()
+                        st.success("Stack tecnológico guardado.")
+                        st.rerun()
+
+            # ---- TAB: Arquitectura ----
+            with tab_arch:
+                st.subheader("🏗️ Arquitectura Empresarial y Tecnológica")
+                with st.form("profile_arch", clear_on_submit=False):
+                    p_arch_style = st.selectbox(
+                        "Estilo de Arquitectura",
+                        ["Monolítica", "SOA", "Microservicios", "Híbrida", "Event-Driven", "Otro"],
+                        index=["Monolítica", "SOA", "Microservicios", "Híbrida", "Event-Driven", "Otro"].index(profile.architecture_style) if profile.architecture_style in ["Monolítica", "SOA", "Microservicios", "Híbrida", "Event-Driven", "Otro"] else 0,
+                    )
+                    p_arch_layers = st.text_area(
+                        "Capas de Arquitectura (una por línea)",
+                        value="\n".join(profile.architecture_layers),
+                        height=100,
+                        help="Ej: Capa de Presentación, Capa de Servicios, Capa de Negocio, Capa de Datos",
+                    )
+                    p_key_systems = st.text_area(
+                        "Sistemas Clave (uno por línea)",
+                        value="\n".join(profile.key_systems),
+                        height=100,
+                        help="Ej: Core Bancario, CRM, ERP, Data Warehouse, Motor de Riesgos",
+                    )
+                    p_ext_int = st.text_area(
+                        "Integraciones Externas (una por línea)",
+                        value="\n".join(profile.external_integrations),
+                        height=80,
+                        help="Ej: SWIFT, Visa/Mastercard, Buró de Crédito, Regulador",
+                    )
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        p_data_plat = st.text_area("Plataforma de Datos", value=profile.data_platform, height=60)
+                    with col2:
+                        p_analytics = st.text_area("Herramientas de Analítica (una por línea)", value="\n".join(profile.analytics_tools), height=60)
+                    p_ai = st.text_area(
+                        "Capacidades AI/ML (una por línea)",
+                        value="\n".join(profile.ai_ml_capabilities),
+                        height=60,
+                    )
+                    if st.form_submit_button("💾 Guardar Arquitectura"):
+                        profile.architecture_style = p_arch_style
+                        profile.architecture_layers = [x.strip() for x in p_arch_layers.strip().splitlines() if x.strip()]
+                        profile.key_systems = [x.strip() for x in p_key_systems.strip().splitlines() if x.strip()]
+                        profile.external_integrations = [x.strip() for x in p_ext_int.strip().splitlines() if x.strip()]
+                        profile.data_platform = p_data_plat
+                        profile.analytics_tools = [x.strip() for x in p_analytics.strip().splitlines() if x.strip()]
+                        profile.ai_ml_capabilities = [x.strip() for x in p_ai.strip().splitlines() if x.strip()]
+                        upsert_bank_profile(session, profile)
+                        session.commit()
+                        st.success("Arquitectura guardada.")
+                        st.rerun()
+
+            # ---- TAB: Canales ----
+            with tab_channels:
+                st.subheader("📡 Canales")
+                with st.form("profile_channels", clear_on_submit=False):
+                    p_digital = st.text_area(
+                        "Canales Digitales (uno por línea)",
+                        value="\n".join(profile.digital_channels),
+                        height=80,
+                        help="Ej: App Móvil, Banca Web, Chatbot, WhatsApp Banking",
+                    )
+                    p_physical = st.text_area(
+                        "Canales Físicos (uno por línea)",
+                        value="\n".join(profile.physical_channels),
+                        height=80,
+                        help="Ej: Agencias, Cajeros ATM, Kioscos, Corresponsales",
+                    )
+                    p_partner = st.text_area(
+                        "Canales de Terceros/Partners (uno por línea)",
+                        value="\n".join(profile.partner_channels),
+                        height=60,
+                    )
+                    if st.form_submit_button("💾 Guardar Canales"):
+                        profile.digital_channels = [x.strip() for x in p_digital.strip().splitlines() if x.strip()]
+                        profile.physical_channels = [x.strip() for x in p_physical.strip().splitlines() if x.strip()]
+                        profile.partner_channels = [x.strip() for x in p_partner.strip().splitlines() if x.strip()]
+                        upsert_bank_profile(session, profile)
+                        session.commit()
+                        st.success("Canales guardados.")
+                        st.rerun()
+
+            # ---- TAB: Organización ----
+            with tab_org:
+                st.subheader("🏢 Estructura Organizacional")
+                with st.form("profile_org", clear_on_submit=False):
+                    p_org_notes = st.text_area(
+                        "Notas sobre Estructura Organizacional",
+                        value=profile.org_structure_notes,
+                        height=100,
+                    )
+                    p_depts = st.text_area(
+                        "Departamentos Clave (uno por línea)",
+                        value="\n".join(profile.key_departments),
+                        height=100,
+                    )
+                    if st.form_submit_button("💾 Guardar Organización"):
+                        profile.org_structure_notes = p_org_notes
+                        profile.key_departments = [x.strip() for x in p_depts.strip().splitlines() if x.strip()]
+                        upsert_bank_profile(session, profile)
+                        session.commit()
+                        st.success("Organización guardada.")
+                        st.rerun()
+
+            # ---- TAB: Evolución ----
+            with tab_history:
+                st.subheader("📈 Historial de Evolución")
+                st.caption(
+                    "Registra hitos importantes: apertura de canales, migraciones de core, "
+                    "modernizaciones tecnológicas, adquisiciones, nuevos servicios, etc."
+                )
+
+                # Show existing events
+                if profile.evolution_history:
+                    for idx, evt in enumerate(profile.evolution_history):
+                        cat_icons = {
+                            "canal": "📡", "modernización": "🚀", "migración": "🔄",
+                            "servicio": "➕", "adquisición": "🤝", "otro": "📌",
+                        }
+                        icon = cat_icons.get(evt.category, "📌")
+                        with st.expander(f"{icon} {evt.event_date} — {evt.title}"):
+                            st.markdown(f"**Categoría:** {evt.category}")
+                            st.markdown(f"**Descripción:** {evt.description}")
+                            if st.button(f"❌ Eliminar evento", key=f"del_evt_{idx}"):
+                                profile.evolution_history.pop(idx)
+                                upsert_bank_profile(session, profile)
+                                session.commit()
+                                st.rerun()
+                else:
+                    st.info("No hay eventos registrados aún.")
+
+                # Add new event
+                st.markdown("---")
+                st.markdown("**Agregar Nuevo Evento**")
+                with st.form("add_event", clear_on_submit=True):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        evt_date = st.date_input("Fecha del Evento", value=date.today())
+                        evt_category = st.selectbox(
+                            "Categoría",
+                            ["canal", "modernización", "migración", "servicio", "adquisición", "otro"],
+                        )
+                    with col2:
+                        evt_title = st.text_input("Título del Evento")
+                    evt_desc = st.text_area("Descripción", height=80)
+                    if st.form_submit_button("➕ Agregar Evento"):
+                        if not evt_title:
+                            st.error("El título es obligatorio.")
+                        else:
+                            new_event = EvolutionEvent(
+                                event_date=evt_date,
+                                category=evt_category,
+                                title=evt_title,
+                                description=evt_desc,
+                            )
+                            profile.evolution_history.append(new_event)
+                            # Sort chronologically
+                            profile.evolution_history.sort(key=lambda e: e.event_date)
+                            upsert_bank_profile(session, profile)
+                            session.commit()
+                            st.success(f"Evento '{evt_title}' agregado.")
+                            st.rerun()
+
+            # ---- TAB: Contexto Adicional ----
+            with tab_extra:
+                st.subheader("📝 Contexto Adicional")
+                with st.form("profile_extra", clear_on_submit=False):
+                    p_extra = st.text_area(
+                        "Notas adicionales (texto libre)",
+                        value=profile.additional_context,
+                        height=200,
+                        help="Cualquier información adicional que no encaje en las otras secciones.",
+                    )
+                    if st.form_submit_button("💾 Guardar Contexto"):
+                        profile.additional_context = p_extra
+                        upsert_bank_profile(session, profile)
+                        session.commit()
+                        st.success("Contexto adicional guardado.")
+                        st.rerun()
+
+            # ---- TAB: JSON Completo ----
+            with tab_json:
+                st.subheader("🔧 Perfil JSON Completo")
+                st.caption("Vista del perfil completo en formato JSON. Puedes editarlo directamente.")
+                profile_json_str = json.dumps(
+                    profile.model_dump(mode="json"),
+                    indent=2,
+                    ensure_ascii=False,
+                    default=str,
+                )
+                edited_json = st.text_area(
+                    "JSON del Perfil",
+                    value=profile_json_str,
+                    height=500,
+                    key="profile_json_editor",
+                )
+                if st.button("💾 Guardar JSON Editado"):
+                    try:
+                        parsed = json.loads(edited_json)
+                        parsed["bank_id"] = selected_bank  # Ensure bank_id consistency
+                        updated_profile = BankProfile.model_validate(parsed)
+                        upsert_bank_profile(session, updated_profile)
+                        session.commit()
+                        st.success("Perfil actualizado desde JSON.")
+                        st.rerun()
+                    except (json.JSONDecodeError, Exception) as e:
+                        st.error(f"JSON inválido: {e}")
+    finally:
+        session.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════# PAGE: PROYECTOS
 # ═══════════════════════════════════════════════════════════════════════════
 
 elif page == "📁 Proyectos":

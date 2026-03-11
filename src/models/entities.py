@@ -120,3 +120,73 @@ class RegulationEntity(BaseModel):
         default_factory=list,
         description="List of BankEntity IDs this regulation applies to",
     )
+
+
+# ---------------------------------------------------------------------------
+# Bank Profile — Source of Truth
+# ---------------------------------------------------------------------------
+
+class EvolutionEvent(BaseModel):
+    """A single event in the bank's evolution history."""
+    event_date: date = Field(..., description="Date of the event")
+    category: str = Field(..., description="Category: canal, modernización, migración, servicio, adquisición, otro")
+    title: str = Field(..., description="Short title of the event")
+    description: str = Field(..., description="Detailed description of the event")
+
+
+class BankProfile(BaseModel):
+    """
+    Comprehensive 'Source of Truth' for a bank.
+
+    Stores structured knowledge about the bank that is used as context
+    during document generation.  Every bank follows this same schema.
+    """
+    bank_id: str = Field(..., description="FK to BankEntity")
+
+    # --- Strategy & Vision ---
+    mission: str = Field(default="", description="Mission statement")
+    vision: str = Field(default="", description="Vision statement")
+    strategic_objectives: list[str] = Field(default_factory=list, description="Key strategic objectives")
+    competitive_advantages: list[str] = Field(default_factory=list, description="Core competitive advantages")
+
+    # --- Business Processes ---
+    core_processes: list[str] = Field(default_factory=list, description="Core banking processes (e.g. lending, deposits, payments)")
+    support_processes: list[str] = Field(default_factory=list, description="Support processes (HR, legal, compliance, etc.)")
+
+    # --- Technology Stack ---
+    core_banking_system: str = Field(default="", description="Core banking platform (e.g. Temenos T24, Finacle)")
+    programming_languages: list[str] = Field(default_factory=list, description="Primary programming languages")
+    databases: list[str] = Field(default_factory=list, description="Database technologies")
+    cloud_providers: list[str] = Field(default_factory=list, description="Cloud providers (AWS, Azure, GCP...)")
+    devops_tools: list[str] = Field(default_factory=list, description="CI/CD and DevOps tooling")
+    integration_middleware: list[str] = Field(default_factory=list, description="ESB, API gateways, messaging")
+    security_stack: list[str] = Field(default_factory=list, description="Security tools and frameworks")
+
+    # --- Enterprise Architecture ---
+    architecture_style: str = Field(default="", description="Dominant architecture style (monolithic, SOA, microservices, hybrid)")
+    architecture_layers: list[str] = Field(default_factory=list, description="Architecture layers description")
+    key_systems: list[str] = Field(default_factory=list, description="Key internal systems and platforms")
+    external_integrations: list[str] = Field(default_factory=list, description="External systems and partners")
+
+    # --- Technology Ecosystem ---
+    data_platform: str = Field(default="", description="Data platform / data lake description")
+    analytics_tools: list[str] = Field(default_factory=list, description="BI and analytics tools")
+    ai_ml_capabilities: list[str] = Field(default_factory=list, description="AI/ML capabilities in use")
+
+    # --- Channels ---
+    digital_channels: list[str] = Field(default_factory=list, description="Digital channels (mobile app, web, chatbot...)")
+    physical_channels: list[str] = Field(default_factory=list, description="Physical channels (branches, ATMs, kiosks...)")
+    partner_channels: list[str] = Field(default_factory=list, description="Partner/third-party channels")
+
+    # --- Organizational ---
+    org_structure_notes: str = Field(default="", description="Notes on organizational structure")
+    key_departments: list[str] = Field(default_factory=list, description="Key departments/divisions")
+
+    # --- Evolution History ---
+    evolution_history: list[EvolutionEvent] = Field(
+        default_factory=list,
+        description="Chronological history of major changes, migrations, new channels, modernization projects",
+    )
+
+    # --- Free-form additional context ---
+    additional_context: str = Field(default="", description="Any additional unstructured notes")
