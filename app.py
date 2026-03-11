@@ -128,8 +128,8 @@ page = st.sidebar.radio(
     "Navegación",
     [
         "🏢 Bancos",
-        "� Fuente de la Verdad",
-        "�📁 Proyectos",
+        "📊 Fuente de la Verdad",
+        "📁 Proyectos",
         "👥 Personal",
         "📜 Regulaciones",
         "📄 Documentos Generados",
