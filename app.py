@@ -120,6 +120,164 @@ def _parse_xmp(xmp_path: Path) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# AI Profile Generation helpers
+# ---------------------------------------------------------------------------
+
+_SECTION_SCHEMAS: dict = {
+    "strategy": {
+        "description": "estrategia institucional",
+        "instructions": "Genera misión, visión, 5-7 objetivos estratégicos y 3-5 ventajas competitivas.",
+        "fields": {
+            "mission": "string — declaración de misión (2-3 oraciones)",
+            "vision": "string — declaración de visión a largo plazo (2-3 oraciones)",
+            "strategic_objectives": "array[string] — 5-7 objetivos estratégicos concretos y medibles",
+            "competitive_advantages": "array[string] — 3-5 ventajas competitivas diferenciadoras",
+        },
+    },
+    "processes": {
+        "description": "procesos de negocio",
+        "instructions": "Genera listas detalladas de procesos core bancarios y procesos de soporte.",
+        "fields": {
+            "core_processes": "array[string] — 8-12 procesos core de negocio bancario",
+            "support_processes": "array[string] — 6-10 procesos de soporte corporativo",
+        },
+    },
+    "tech": {
+        "description": "stack tecnológico",
+        "instructions": "Genera el stack tecnológico completo coherente con el tamaño y país del banco.",
+        "fields": {
+            "core_banking_system": "string — nombre del sistema core bancario principal",
+            "programming_languages": "array[string] — lenguajes de programación en uso",
+            "databases": "array[string] — motores de bases de datos SQL y NoSQL",
+            "cloud_providers": "array[string] — proveedores de nube (ej. AWS, Azure, GCP)",
+            "devops_tools": "array[string] — herramientas CI/CD y DevOps",
+            "integration_middleware": "array[string] — ESB, API gateway, mensajería",
+            "security_stack": "array[string] — herramientas y frameworks de seguridad cibernética",
+        },
+    },
+    "architecture": {
+        "description": "arquitectura empresarial y tecnológica",
+        "instructions": "Genera la descripción completa de la arquitectura tecnológica del banco.",
+        "fields": {
+            "architecture_style": "string — EXACTAMENTE uno de: Monolítica | SOA | Microservicios | Híbrida | Event-Driven | Otro",
+            "architecture_layers": "array[string] — capas de la arquitectura (4-6 capas)",
+            "key_systems": "array[string] — sistemas internos clave (6-10 sistemas)",
+            "external_integrations": "array[string] — integraciones externas: redes de pago, reguladores, buros, etc.",
+            "data_platform": "string — descripción de la plataforma de datos / data lake",
+            "analytics_tools": "array[string] — herramientas de BI y analítica",
+            "ai_ml_capabilities": "array[string] — capacidades AI/ML actualmente en uso",
+        },
+    },
+    "channels": {
+        "description": "canales de atención al cliente",
+        "instructions": "Genera la lista de canales digitales, físicos y de terceros del banco.",
+        "fields": {
+            "digital_channels": "array[string] — canales digitales (app, web, chatbot, etc.)",
+            "physical_channels": "array[string] — canales físicos (agencias, ATMs, kioscos, etc.)",
+            "partner_channels": "array[string] — canales de terceros y aliados comerciales",
+        },
+    },
+    "org": {
+        "description": "estructura organizacional",
+        "instructions": "Genera descripción de la estructura organizacional y departamentos clave.",
+        "fields": {
+            "org_structure_notes": "string — descripción de la estructura organizacional (3-4 párrafos)",
+            "key_departments": "array[string] — 8-15 departamentos y divisiones clave",
+        },
+    },
+    "context": {
+        "description": "contexto adicional",
+        "instructions": "Genera contexto rico sobre cultura, posicionamiento de mercado, desafíos y planes.",
+        "fields": {
+            "additional_context": "string — contexto detallado sobre el banco: cultura, mercado, desafíos actuales, iniciativas estratégicas y planes a futuro (4-6 párrafos)",
+        },
+    },
+    "evolution": {
+        "description": "historial de evolución tecnológica",
+        "instructions": "Genera 6-8 hitos clave en la historia tecnológica y de negocio del banco, ordenados cronológicamente desde su fundación hasta hoy.",
+        "fields": {
+            "events": (
+                "array[object] — cada objeto debe tener exactamente estas claves: "
+                "{event_date: 'YYYY-MM-DD', "
+                "category: uno de [canal, modernización, migración, servicio, adquisición, otro], "
+                "title: string corto, "
+                "description: string detallado (2-3 oraciones)}"
+            ),
+        },
+    },
+}
+
+
+def _build_master_context(bank: "BankEntity", profile: "BankProfile") -> str:
+    """Build the master context string from all known bank data for AI prompts."""
+    parts = [
+        f"Nombre: {bank.name}",
+        f"País: {bank.country}",
+        f"Clasificación: {bank.tier}",
+        f"Activos totales: USD {bank.total_assets_usd} mil millones",
+        f"Año de fundación: {bank.founded_year}",
+    ]
+    if profile.mission:
+        parts.append(f"Misión: {profile.mission}")
+    if profile.vision:
+        parts.append(f"Visión: {profile.vision}")
+    if profile.strategic_objectives:
+        parts.append(f"Objetivos: {'; '.join(profile.strategic_objectives[:4])}")
+    if profile.core_banking_system:
+        parts.append(f"Core bancario: {profile.core_banking_system}")
+    if profile.architecture_style:
+        parts.append(f"Arquitectura: {profile.architecture_style}")
+    if profile.cloud_providers:
+        parts.append(f"Cloud: {', '.join(profile.cloud_providers)}")
+    if profile.digital_channels:
+        parts.append(f"Canales digitales: {', '.join(profile.digital_channels[:4])}")
+    if profile.core_processes:
+        parts.append(f"Procesos core: {', '.join(profile.core_processes[:5])}")
+    if profile.key_departments:
+        parts.append(f"Departamentos: {', '.join(profile.key_departments[:5])}")
+    if profile.evolution_history:
+        last = profile.evolution_history[-1]
+        parts.append(f"Último hito registrado ({last.event_date}): {last.title}")
+    return "\n".join(parts)
+
+
+def _ai_generate_section(bank: "BankEntity", profile: "BankProfile", section: str) -> dict:
+    """Call gpt-4o-mini to generate structured content for one profile section."""
+    from openai import OpenAI
+
+    schema = _SECTION_SCHEMAS[section]
+    fields_desc = "\n".join(f"  - {k}: {v}" for k, v in schema["fields"].items())
+    master_ctx = _build_master_context(bank, profile)
+
+    system_msg = (
+        "Eres un consultor senior especializado en banca y transformación digital. "
+        "Genera información realista, específica y coherente para el perfil institucional "
+        "de un banco ficticio. Responde ÚNICAMENTE con un objeto JSON válido. "
+        "Todo el contenido debe estar en ESPAÑOL."
+    )
+    user_msg = (
+        f"Genera la sección '{schema['description']}' para el banco '{bank.name}'.\n\n"
+        f"CONTEXTO CONOCIDO DEL BANCO:\n{master_ctx}\n\n"
+        f"INSTRUCCIÓN: {schema['instructions']}\n\n"
+        f"RESPONDE CON EXACTAMENTE ESTE ESQUEMA JSON:\n{{\n{fields_desc}\n}}\n\n"
+        "El contenido debe ser específico, realista y coherente con todos los datos conocidos. "
+        "Devuelve ÚNICAMENTE el objeto JSON válido, sin explicaciones adicionales."
+    )
+
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.7,
+    )
+    return json.loads(resp.choices[0].message.content)
+
+
+# ---------------------------------------------------------------------------
 # Sidebar navigation
 # ---------------------------------------------------------------------------
 
@@ -255,6 +413,7 @@ elif page == "📊 Fuente de la Verdad":
                 format_func=lambda x: f"{bank_map[x]} ({x})",
                 key="profile_bank_select",
             )
+            bank_entity = next(b for b in banks if b.bank_id == selected_bank)
 
             # Load existing profile or create empty
             profile = get_bank_profile(session, selected_bank)
@@ -262,7 +421,31 @@ elif page == "📊 Fuente de la Verdad":
                 profile = BankProfile(bank_id=selected_bank)
                 st.info("Este banco aún no tiene perfil. Completa los campos y guarda.")
 
-            # ---- TABS for structured sections ----
+            # ── Sidebar: Generate full profile ──────────────────────────
+            st.sidebar.divider()
+            st.sidebar.markdown("### 🤖 Asistente IA")
+            if st.sidebar.button(
+                "🤖 Generar Perfil Completo con IA",
+                key=f"ai_full_{selected_bank}",
+                type="primary",
+                help="Genera todas las secciones del perfil en un solo clic usando gpt-4o-mini.",
+            ):
+                _sections_all = ["strategy", "processes", "tech", "architecture", "channels", "org", "context"]
+                _prog = st.sidebar.progress(0, text="Iniciando generación...")
+                for _i, _sec in enumerate(_sections_all):
+                    _prog.progress(
+                        int((_i / len(_sections_all)) * 100),
+                        text=f"Generando {_SECTION_SCHEMAS[_sec]['description']}...",
+                    )
+                    try:
+                        _res = _ai_generate_section(bank_entity, profile, _sec)
+                        st.session_state[f"ai_{selected_bank}_{_sec}"] = _res
+                    except Exception as _exc:
+                        st.sidebar.warning(f"[{_sec}] Error: {_exc}")
+                _prog.progress(100, text="¡Completo!")
+                st.rerun()
+
+            # ── TABS ─────────────────────────────────────────────────────
             tab_strategy, tab_processes, tab_tech, tab_arch, tab_channels, tab_org, tab_history, tab_extra, tab_json = st.tabs([
                 "🎯 Estrategia",
                 "⚙️ Procesos",
@@ -275,20 +458,56 @@ elif page == "📊 Fuente de la Verdad":
                 "🔧 JSON Completo",
             ])
 
-            # ---- TAB: Estrategia ----
+            # ── TAB: Estrategia ──────────────────────────────────────────
             with tab_strategy:
                 st.subheader("🎯 Estrategia y Visión")
-                with st.form("profile_strategy", clear_on_submit=False):
-                    p_mission = st.text_area("Misión", value=profile.mission, height=80)
-                    p_vision = st.text_area("Visión", value=profile.vision, height=80)
+                if st.button(
+                    "🤖 Generar Estrategia con IA",
+                    key=f"ai_btn_strategy_{selected_bank}",
+                    help="Genera misión, visión, objetivos y ventajas competitivas usando gpt-4o-mini.",
+                ):
+                    with st.spinner("Generando estrategia institucional..."):
+                        try:
+                            _r = _ai_generate_section(bank_entity, profile, "strategy")
+                            st.session_state[f"wgt_{selected_bank}_mission"] = _r.get("mission", "")
+                            st.session_state[f"wgt_{selected_bank}_vision"] = _r.get("vision", "")
+                            st.session_state[f"wgt_{selected_bank}_objectives"] = "\n".join(_r.get("strategic_objectives", []))
+                            st.session_state[f"wgt_{selected_bank}_advantages"] = "\n".join(_r.get("competitive_advantages", []))
+                            st.session_state.pop(f"ai_{selected_bank}_strategy", None)
+                            st.rerun()
+                        except Exception as _e:
+                            st.error(f"Error IA: {_e}")
+                # Absorb full-profile AI results into widget state
+                _ai_strategy = st.session_state.pop(f"ai_{selected_bank}_strategy", None)
+                if _ai_strategy:
+                    st.session_state[f"wgt_{selected_bank}_mission"] = _ai_strategy.get("mission", "")
+                    st.session_state[f"wgt_{selected_bank}_vision"] = _ai_strategy.get("vision", "")
+                    st.session_state[f"wgt_{selected_bank}_objectives"] = "\n".join(_ai_strategy.get("strategic_objectives", []))
+                    st.session_state[f"wgt_{selected_bank}_advantages"] = "\n".join(_ai_strategy.get("competitive_advantages", []))
+                    st.rerun()
+                with st.form(f"profile_strategy_{selected_bank}", clear_on_submit=False):
+                    p_mission = st.text_area(
+                        "Misión",
+                        value=profile.mission,
+                        key=f"wgt_{selected_bank}_mission",
+                        height=80,
+                    )
+                    p_vision = st.text_area(
+                        "Visión",
+                        value=profile.vision,
+                        key=f"wgt_{selected_bank}_vision",
+                        height=80,
+                    )
                     p_objectives = st.text_area(
                         "Objetivos Estratégicos (uno por línea)",
                         value="\n".join(profile.strategic_objectives),
+                        key=f"wgt_{selected_bank}_objectives",
                         height=120,
                     )
                     p_advantages = st.text_area(
                         "Ventajas Competitivas (una por línea)",
                         value="\n".join(profile.competitive_advantages),
+                        key=f"wgt_{selected_bank}_advantages",
                         height=100,
                     )
                     if st.form_submit_button("💾 Guardar Estrategia"):
@@ -301,19 +520,40 @@ elif page == "📊 Fuente de la Verdad":
                         st.success("Estrategia guardada.")
                         st.rerun()
 
-            # ---- TAB: Procesos ----
+            # ── TAB: Procesos ────────────────────────────────────────────
             with tab_processes:
                 st.subheader("⚙️ Procesos de Negocio")
-                with st.form("profile_processes", clear_on_submit=False):
+                if st.button(
+                    "🤖 Generar Procesos con IA",
+                    key=f"ai_btn_processes_{selected_bank}",
+                    help="Genera listas de procesos core y de soporte usando gpt-4o-mini.",
+                ):
+                    with st.spinner("Generando procesos de negocio..."):
+                        try:
+                            _r = _ai_generate_section(bank_entity, profile, "processes")
+                            st.session_state[f"wgt_{selected_bank}_core_procs"] = "\n".join(_r.get("core_processes", []))
+                            st.session_state[f"wgt_{selected_bank}_support_procs"] = "\n".join(_r.get("support_processes", []))
+                            st.session_state.pop(f"ai_{selected_bank}_processes", None)
+                            st.rerun()
+                        except Exception as _e:
+                            st.error(f"Error IA: {_e}")
+                _ai_proc = st.session_state.pop(f"ai_{selected_bank}_processes", None)
+                if _ai_proc:
+                    st.session_state[f"wgt_{selected_bank}_core_procs"] = "\n".join(_ai_proc.get("core_processes", []))
+                    st.session_state[f"wgt_{selected_bank}_support_procs"] = "\n".join(_ai_proc.get("support_processes", []))
+                    st.rerun()
+                with st.form(f"profile_processes_{selected_bank}", clear_on_submit=False):
                     p_core = st.text_area(
                         "Procesos Core (uno por línea)",
                         value="\n".join(profile.core_processes),
+                        key=f"wgt_{selected_bank}_core_procs",
                         height=120,
                         help="Ej: Captaciones, Colocaciones, Pagos, Comercio Exterior, Tesorería",
                     )
                     p_support = st.text_area(
                         "Procesos de Soporte (uno por línea)",
                         value="\n".join(profile.support_processes),
+                        key=f"wgt_{selected_bank}_support_procs",
                         height=120,
                         help="Ej: Recursos Humanos, Legal, Compliance, Auditoría Interna",
                     )
@@ -325,20 +565,84 @@ elif page == "📊 Fuente de la Verdad":
                         st.success("Procesos guardados.")
                         st.rerun()
 
-            # ---- TAB: Tecnología ----
+            # ── TAB: Tecnología ──────────────────────────────────────────
             with tab_tech:
                 st.subheader("💻 Stack Tecnológico")
-                with st.form("profile_tech", clear_on_submit=False):
+                if st.button(
+                    "🤖 Generar Stack Tecnológico con IA",
+                    key=f"ai_btn_tech_{selected_bank}",
+                    help="Genera el stack tecnológico completo usando gpt-4o-mini.",
+                ):
+                    with st.spinner("Generando stack tecnológico..."):
+                        try:
+                            _r = _ai_generate_section(bank_entity, profile, "tech")
+                            st.session_state[f"wgt_{selected_bank}_core_sys"] = _r.get("core_banking_system", "")
+                            st.session_state[f"wgt_{selected_bank}_langs"] = "\n".join(_r.get("programming_languages", []))
+                            st.session_state[f"wgt_{selected_bank}_dbs"] = "\n".join(_r.get("databases", []))
+                            st.session_state[f"wgt_{selected_bank}_cloud"] = "\n".join(_r.get("cloud_providers", []))
+                            st.session_state[f"wgt_{selected_bank}_devops"] = "\n".join(_r.get("devops_tools", []))
+                            st.session_state[f"wgt_{selected_bank}_middleware"] = "\n".join(_r.get("integration_middleware", []))
+                            st.session_state[f"wgt_{selected_bank}_security"] = "\n".join(_r.get("security_stack", []))
+                            st.session_state.pop(f"ai_{selected_bank}_tech", None)
+                            st.rerun()
+                        except Exception as _e:
+                            st.error(f"Error IA: {_e}")
+                _ai_tech = st.session_state.pop(f"ai_{selected_bank}_tech", None)
+                if _ai_tech:
+                    st.session_state[f"wgt_{selected_bank}_core_sys"] = _ai_tech.get("core_banking_system", "")
+                    st.session_state[f"wgt_{selected_bank}_langs"] = "\n".join(_ai_tech.get("programming_languages", []))
+                    st.session_state[f"wgt_{selected_bank}_dbs"] = "\n".join(_ai_tech.get("databases", []))
+                    st.session_state[f"wgt_{selected_bank}_cloud"] = "\n".join(_ai_tech.get("cloud_providers", []))
+                    st.session_state[f"wgt_{selected_bank}_devops"] = "\n".join(_ai_tech.get("devops_tools", []))
+                    st.session_state[f"wgt_{selected_bank}_middleware"] = "\n".join(_ai_tech.get("integration_middleware", []))
+                    st.session_state[f"wgt_{selected_bank}_security"] = "\n".join(_ai_tech.get("security_stack", []))
+                    st.rerun()
+                with st.form(f"profile_tech_{selected_bank}", clear_on_submit=False):
                     col1, col2 = st.columns(2)
                     with col1:
-                        p_core_sys = st.text_input("Core Bancario", value=profile.core_banking_system, help="Ej: Temenos T24, Finacle, Cobis")
-                        p_langs = st.text_area("Lenguajes de Programación (uno por línea)", value="\n".join(profile.programming_languages), height=80)
-                        p_dbs = st.text_area("Bases de Datos (una por línea)", value="\n".join(profile.databases), height=80)
-                        p_cloud = st.text_area("Proveedores Cloud (uno por línea)", value="\n".join(profile.cloud_providers), height=60)
+                        p_core_sys = st.text_input(
+                            "Core Bancario",
+                            value=profile.core_banking_system,
+                            key=f"wgt_{selected_bank}_core_sys",
+                            help="Ej: Temenos T24, Finacle, Cobis, Mambu",
+                        )
+                        p_langs = st.text_area(
+                            "Lenguajes de Programación (uno por línea)",
+                            value="\n".join(profile.programming_languages),
+                            key=f"wgt_{selected_bank}_langs",
+                            height=80,
+                        )
+                        p_dbs = st.text_area(
+                            "Bases de Datos (una por línea)",
+                            value="\n".join(profile.databases),
+                            key=f"wgt_{selected_bank}_dbs",
+                            height=80,
+                        )
+                        p_cloud = st.text_area(
+                            "Proveedores Cloud (uno por línea)",
+                            value="\n".join(profile.cloud_providers),
+                            key=f"wgt_{selected_bank}_cloud",
+                            height=60,
+                        )
                     with col2:
-                        p_devops = st.text_area("Herramientas DevOps (una por línea)", value="\n".join(profile.devops_tools), height=80)
-                        p_integration = st.text_area("Middleware/Integración (uno por línea)", value="\n".join(profile.integration_middleware), height=80)
-                        p_security = st.text_area("Stack de Seguridad (uno por línea)", value="\n".join(profile.security_stack), height=80)
+                        p_devops = st.text_area(
+                            "Herramientas DevOps (una por línea)",
+                            value="\n".join(profile.devops_tools),
+                            key=f"wgt_{selected_bank}_devops",
+                            height=80,
+                        )
+                        p_integration = st.text_area(
+                            "Middleware/Integración (uno por línea)",
+                            value="\n".join(profile.integration_middleware),
+                            key=f"wgt_{selected_bank}_middleware",
+                            height=80,
+                        )
+                        p_security = st.text_area(
+                            "Stack de Seguridad (uno por línea)",
+                            value="\n".join(profile.security_stack),
+                            key=f"wgt_{selected_bank}_security",
+                            height=80,
+                        )
                     if st.form_submit_button("💾 Guardar Tecnología"):
                         profile.core_banking_system = p_core_sys
                         profile.programming_languages = [x.strip() for x in p_langs.strip().splitlines() if x.strip()]
@@ -352,41 +656,90 @@ elif page == "📊 Fuente de la Verdad":
                         st.success("Stack tecnológico guardado.")
                         st.rerun()
 
-            # ---- TAB: Arquitectura ----
+            # ── TAB: Arquitectura ────────────────────────────────────────
             with tab_arch:
                 st.subheader("🏗️ Arquitectura Empresarial y Tecnológica")
-                with st.form("profile_arch", clear_on_submit=False):
+                _arch_opts = ["Monolítica", "SOA", "Microservicios", "Híbrida", "Event-Driven", "Otro"]
+                if st.button(
+                    "🤖 Generar Arquitectura con IA",
+                    key=f"ai_btn_arch_{selected_bank}",
+                    help="Genera la descripción de arquitectura tecnológica usando gpt-4o-mini.",
+                ):
+                    with st.spinner("Generando arquitectura..."):
+                        try:
+                            _r = _ai_generate_section(bank_entity, profile, "architecture")
+                            _style = _r.get("architecture_style", "Híbrida")
+                            st.session_state[f"wgt_{selected_bank}_arch_style"] = _style if _style in _arch_opts else "Híbrida"
+                            st.session_state[f"wgt_{selected_bank}_arch_layers"] = "\n".join(_r.get("architecture_layers", []))
+                            st.session_state[f"wgt_{selected_bank}_key_systems"] = "\n".join(_r.get("key_systems", []))
+                            st.session_state[f"wgt_{selected_bank}_ext_int"] = "\n".join(_r.get("external_integrations", []))
+                            st.session_state[f"wgt_{selected_bank}_data_plat"] = _r.get("data_platform", "")
+                            st.session_state[f"wgt_{selected_bank}_analytics"] = "\n".join(_r.get("analytics_tools", []))
+                            st.session_state[f"wgt_{selected_bank}_ai_ml"] = "\n".join(_r.get("ai_ml_capabilities", []))
+                            st.session_state.pop(f"ai_{selected_bank}_architecture", None)
+                            st.rerun()
+                        except Exception as _e:
+                            st.error(f"Error IA: {_e}")
+                _ai_arch = st.session_state.pop(f"ai_{selected_bank}_architecture", None)
+                if _ai_arch:
+                    _style = _ai_arch.get("architecture_style", "Híbrida")
+                    st.session_state[f"wgt_{selected_bank}_arch_style"] = _style if _style in _arch_opts else "Híbrida"
+                    st.session_state[f"wgt_{selected_bank}_arch_layers"] = "\n".join(_ai_arch.get("architecture_layers", []))
+                    st.session_state[f"wgt_{selected_bank}_key_systems"] = "\n".join(_ai_arch.get("key_systems", []))
+                    st.session_state[f"wgt_{selected_bank}_ext_int"] = "\n".join(_ai_arch.get("external_integrations", []))
+                    st.session_state[f"wgt_{selected_bank}_data_plat"] = _ai_arch.get("data_platform", "")
+                    st.session_state[f"wgt_{selected_bank}_analytics"] = "\n".join(_ai_arch.get("analytics_tools", []))
+                    st.session_state[f"wgt_{selected_bank}_ai_ml"] = "\n".join(_ai_arch.get("ai_ml_capabilities", []))
+                    st.rerun()
+                with st.form(f"profile_arch_{selected_bank}", clear_on_submit=False):
+                    _cur_arch = profile.architecture_style
+                    _arch_idx = _arch_opts.index(_cur_arch) if _cur_arch in _arch_opts else 0
                     p_arch_style = st.selectbox(
                         "Estilo de Arquitectura",
-                        ["Monolítica", "SOA", "Microservicios", "Híbrida", "Event-Driven", "Otro"],
-                        index=["Monolítica", "SOA", "Microservicios", "Híbrida", "Event-Driven", "Otro"].index(profile.architecture_style) if profile.architecture_style in ["Monolítica", "SOA", "Microservicios", "Híbrida", "Event-Driven", "Otro"] else 0,
+                        _arch_opts,
+                        index=_arch_idx,
+                        key=f"wgt_{selected_bank}_arch_style",
                     )
                     p_arch_layers = st.text_area(
                         "Capas de Arquitectura (una por línea)",
                         value="\n".join(profile.architecture_layers),
+                        key=f"wgt_{selected_bank}_arch_layers",
                         height=100,
                         help="Ej: Capa de Presentación, Capa de Servicios, Capa de Negocio, Capa de Datos",
                     )
                     p_key_systems = st.text_area(
                         "Sistemas Clave (uno por línea)",
                         value="\n".join(profile.key_systems),
+                        key=f"wgt_{selected_bank}_key_systems",
                         height=100,
                         help="Ej: Core Bancario, CRM, ERP, Data Warehouse, Motor de Riesgos",
                     )
                     p_ext_int = st.text_area(
                         "Integraciones Externas (una por línea)",
                         value="\n".join(profile.external_integrations),
+                        key=f"wgt_{selected_bank}_ext_int",
                         height=80,
                         help="Ej: SWIFT, Visa/Mastercard, Buró de Crédito, Regulador",
                     )
                     col1, col2 = st.columns(2)
                     with col1:
-                        p_data_plat = st.text_area("Plataforma de Datos", value=profile.data_platform, height=60)
+                        p_data_plat = st.text_area(
+                            "Plataforma de Datos",
+                            value=profile.data_platform,
+                            key=f"wgt_{selected_bank}_data_plat",
+                            height=60,
+                        )
                     with col2:
-                        p_analytics = st.text_area("Herramientas de Analítica (una por línea)", value="\n".join(profile.analytics_tools), height=60)
+                        p_analytics = st.text_area(
+                            "Herramientas de Analítica (una por línea)",
+                            value="\n".join(profile.analytics_tools),
+                            key=f"wgt_{selected_bank}_analytics",
+                            height=60,
+                        )
                     p_ai = st.text_area(
                         "Capacidades AI/ML (una por línea)",
                         value="\n".join(profile.ai_ml_capabilities),
+                        key=f"wgt_{selected_bank}_ai_ml",
                         height=60,
                     )
                     if st.form_submit_button("💾 Guardar Arquitectura"):
@@ -402,25 +755,49 @@ elif page == "📊 Fuente de la Verdad":
                         st.success("Arquitectura guardada.")
                         st.rerun()
 
-            # ---- TAB: Canales ----
+            # ── TAB: Canales ─────────────────────────────────────────────
             with tab_channels:
-                st.subheader("📡 Canales")
-                with st.form("profile_channels", clear_on_submit=False):
+                st.subheader("📡 Canales de Atención")
+                if st.button(
+                    "🤖 Generar Canales con IA",
+                    key=f"ai_btn_channels_{selected_bank}",
+                    help="Genera la lista de canales digitales, físicos y de terceros usando gpt-4o-mini.",
+                ):
+                    with st.spinner("Generando canales..."):
+                        try:
+                            _r = _ai_generate_section(bank_entity, profile, "channels")
+                            st.session_state[f"wgt_{selected_bank}_digital_ch"] = "\n".join(_r.get("digital_channels", []))
+                            st.session_state[f"wgt_{selected_bank}_physical_ch"] = "\n".join(_r.get("physical_channels", []))
+                            st.session_state[f"wgt_{selected_bank}_partner_ch"] = "\n".join(_r.get("partner_channels", []))
+                            st.session_state.pop(f"ai_{selected_bank}_channels", None)
+                            st.rerun()
+                        except Exception as _e:
+                            st.error(f"Error IA: {_e}")
+                _ai_ch = st.session_state.pop(f"ai_{selected_bank}_channels", None)
+                if _ai_ch:
+                    st.session_state[f"wgt_{selected_bank}_digital_ch"] = "\n".join(_ai_ch.get("digital_channels", []))
+                    st.session_state[f"wgt_{selected_bank}_physical_ch"] = "\n".join(_ai_ch.get("physical_channels", []))
+                    st.session_state[f"wgt_{selected_bank}_partner_ch"] = "\n".join(_ai_ch.get("partner_channels", []))
+                    st.rerun()
+                with st.form(f"profile_channels_{selected_bank}", clear_on_submit=False):
                     p_digital = st.text_area(
                         "Canales Digitales (uno por línea)",
                         value="\n".join(profile.digital_channels),
+                        key=f"wgt_{selected_bank}_digital_ch",
                         height=80,
-                        help="Ej: App Móvil, Banca Web, Chatbot, WhatsApp Banking",
+                        help="Ej: App Móvil iOS, App Móvil Android, Banca Web, Chatbot, WhatsApp Banking",
                     )
                     p_physical = st.text_area(
                         "Canales Físicos (uno por línea)",
                         value="\n".join(profile.physical_channels),
+                        key=f"wgt_{selected_bank}_physical_ch",
                         height=80,
-                        help="Ej: Agencias, Cajeros ATM, Kioscos, Corresponsales",
+                        help="Ej: Agencias, Cajeros ATM, Kioscos, Corresponsales bancarios",
                     )
                     p_partner = st.text_area(
                         "Canales de Terceros/Partners (uno por línea)",
                         value="\n".join(profile.partner_channels),
+                        key=f"wgt_{selected_bank}_partner_ch",
                         height=60,
                     )
                     if st.form_submit_button("💾 Guardar Canales"):
@@ -432,18 +809,39 @@ elif page == "📊 Fuente de la Verdad":
                         st.success("Canales guardados.")
                         st.rerun()
 
-            # ---- TAB: Organización ----
+            # ── TAB: Organización ────────────────────────────────────────
             with tab_org:
                 st.subheader("🏢 Estructura Organizacional")
-                with st.form("profile_org", clear_on_submit=False):
+                if st.button(
+                    "🤖 Generar Organización con IA",
+                    key=f"ai_btn_org_{selected_bank}",
+                    help="Genera la estructura organizacional y departamentos usando gpt-4o-mini.",
+                ):
+                    with st.spinner("Generando estructura organizacional..."):
+                        try:
+                            _r = _ai_generate_section(bank_entity, profile, "org")
+                            st.session_state[f"wgt_{selected_bank}_org_notes"] = _r.get("org_structure_notes", "")
+                            st.session_state[f"wgt_{selected_bank}_depts"] = "\n".join(_r.get("key_departments", []))
+                            st.session_state.pop(f"ai_{selected_bank}_org", None)
+                            st.rerun()
+                        except Exception as _e:
+                            st.error(f"Error IA: {_e}")
+                _ai_org = st.session_state.pop(f"ai_{selected_bank}_org", None)
+                if _ai_org:
+                    st.session_state[f"wgt_{selected_bank}_org_notes"] = _ai_org.get("org_structure_notes", "")
+                    st.session_state[f"wgt_{selected_bank}_depts"] = "\n".join(_ai_org.get("key_departments", []))
+                    st.rerun()
+                with st.form(f"profile_org_{selected_bank}", clear_on_submit=False):
                     p_org_notes = st.text_area(
                         "Notas sobre Estructura Organizacional",
                         value=profile.org_structure_notes,
-                        height=100,
+                        key=f"wgt_{selected_bank}_org_notes",
+                        height=120,
                     )
                     p_depts = st.text_area(
                         "Departamentos Clave (uno por línea)",
                         value="\n".join(profile.key_departments),
+                        key=f"wgt_{selected_bank}_depts",
                         height=100,
                     )
                     if st.form_submit_button("💾 Guardar Organización"):
@@ -454,26 +852,75 @@ elif page == "📊 Fuente de la Verdad":
                         st.success("Organización guardada.")
                         st.rerun()
 
-            # ---- TAB: Evolución ----
+            # ── TAB: Evolución ───────────────────────────────────────────
             with tab_history:
-                st.subheader("📈 Historial de Evolución")
+                st.subheader("📈 Historial de Evolución Tecnológica y de Negocio")
                 st.caption(
-                    "Registra hitos importantes: apertura de canales, migraciones de core, "
-                    "modernizaciones tecnológicas, adquisiciones, nuevos servicios, etc."
+                    "Registra hitos importantes: migraciones de core, apertura de canales, "
+                    "modernizaciones, adquisiciones, nuevos servicios, etc."
                 )
+
+                # AI: Suggest events to add
+                if st.button(
+                    "🤖 Sugerir Eventos con IA",
+                    key=f"ai_btn_evo_{selected_bank}",
+                    help="La IA sugiere hitos históricos. Puedes añadir los que desees al historial.",
+                ):
+                    with st.spinner("Generando sugerencias de hitos históricos..."):
+                        try:
+                            _r = _ai_generate_section(bank_entity, profile, "evolution")
+                            st.session_state[f"ai_{selected_bank}_evo_suggestions"] = _r.get("events", [])
+                            st.rerun()
+                        except Exception as _e:
+                            st.error(f"Error IA: {_e}")
+
+                # Show AI-suggested events (if any)
+                _evo_suggestions = st.session_state.get(f"ai_{selected_bank}_evo_suggestions", [])
+                if _evo_suggestions:
+                    st.markdown("#### 💡 Sugerencias de la IA — selecciona los que quieras agregar:")
+                    _cat_icons = {
+                        "canal": "📡", "modernización": "🚀", "migración": "🔄",
+                        "servicio": "➕", "adquisición": "🤝", "otro": "📌",
+                    }
+                    for _si, _evt in enumerate(_evo_suggestions):
+                        _icon = _cat_icons.get(_evt.get("category", "otro"), "📌")
+                        with st.expander(f"{_icon} {_evt.get('event_date', '?')} — {_evt.get('title', '?')}"):
+                            st.markdown(f"**Categoría:** {_evt.get('category', '?')}")
+                            st.markdown(f"**Descripción:** {_evt.get('description', '')}")
+                            if st.button(f"➕ Agregar al historial", key=f"add_evo_{selected_bank}_{_si}"):
+                                try:
+                                    new_evt = EvolutionEvent(
+                                        event_date=_evt["event_date"],
+                                        category=_evt.get("category", "otro"),
+                                        title=_evt.get("title", ""),
+                                        description=_evt.get("description", ""),
+                                    )
+                                    profile.evolution_history.append(new_evt)
+                                    profile.evolution_history.sort(key=lambda e: e.event_date)
+                                    upsert_bank_profile(session, profile)
+                                    session.commit()
+                                    # Remove this suggestion
+                                    st.session_state[f"ai_{selected_bank}_evo_suggestions"].pop(_si)
+                                    st.rerun()
+                                except Exception as _e:
+                                    st.error(f"Error al agregar evento: {_e}")
+                    if st.button("✖ Descartar sugerencias", key=f"discard_evo_{selected_bank}"):
+                        del st.session_state[f"ai_{selected_bank}_evo_suggestions"]
+                        st.rerun()
+                    st.markdown("---")
 
                 # Show existing events
                 if profile.evolution_history:
                     for idx, evt in enumerate(profile.evolution_history):
-                        cat_icons = {
+                        _cat_icons2 = {
                             "canal": "📡", "modernización": "🚀", "migración": "🔄",
                             "servicio": "➕", "adquisición": "🤝", "otro": "📌",
                         }
-                        icon = cat_icons.get(evt.category, "📌")
+                        icon = _cat_icons2.get(evt.category, "📌")
                         with st.expander(f"{icon} {evt.event_date} — {evt.title}"):
                             st.markdown(f"**Categoría:** {evt.category}")
                             st.markdown(f"**Descripción:** {evt.description}")
-                            if st.button(f"❌ Eliminar evento", key=f"del_evt_{idx}"):
+                            if st.button("❌ Eliminar evento", key=f"del_evt_{selected_bank}_{idx}"):
                                 profile.evolution_history.pop(idx)
                                 upsert_bank_profile(session, profile)
                                 session.commit()
@@ -481,10 +928,10 @@ elif page == "📊 Fuente de la Verdad":
                 else:
                     st.info("No hay eventos registrados aún.")
 
-                # Add new event
+                # Add new event manually
                 st.markdown("---")
-                st.markdown("**Agregar Nuevo Evento**")
-                with st.form("add_event", clear_on_submit=True):
+                st.markdown("**Agregar Nuevo Evento Manualmente**")
+                with st.form(f"add_event_{selected_bank}", clear_on_submit=True):
                     col1, col2 = st.columns(2)
                     with col1:
                         evt_date = st.date_input("Fecha del Evento", value=date.today())
@@ -506,22 +953,39 @@ elif page == "📊 Fuente de la Verdad":
                                 description=evt_desc,
                             )
                             profile.evolution_history.append(new_event)
-                            # Sort chronologically
                             profile.evolution_history.sort(key=lambda e: e.event_date)
                             upsert_bank_profile(session, profile)
                             session.commit()
                             st.success(f"Evento '{evt_title}' agregado.")
                             st.rerun()
 
-            # ---- TAB: Contexto Adicional ----
+            # ── TAB: Contexto Adicional ──────────────────────────────────
             with tab_extra:
                 st.subheader("📝 Contexto Adicional")
-                with st.form("profile_extra", clear_on_submit=False):
+                if st.button(
+                    "🤖 Generar Contexto con IA",
+                    key=f"ai_btn_context_{selected_bank}",
+                    help="Genera contexto rico sobre cultura, mercado y desafíos del banco usando gpt-4o-mini.",
+                ):
+                    with st.spinner("Generando contexto adicional..."):
+                        try:
+                            _r = _ai_generate_section(bank_entity, profile, "context")
+                            st.session_state[f"wgt_{selected_bank}_extra"] = _r.get("additional_context", "")
+                            st.session_state.pop(f"ai_{selected_bank}_context", None)
+                            st.rerun()
+                        except Exception as _e:
+                            st.error(f"Error IA: {_e}")
+                _ai_ctx = st.session_state.pop(f"ai_{selected_bank}_context", None)
+                if _ai_ctx:
+                    st.session_state[f"wgt_{selected_bank}_extra"] = _ai_ctx.get("additional_context", "")
+                    st.rerun()
+                with st.form(f"profile_extra_{selected_bank}", clear_on_submit=False):
                     p_extra = st.text_area(
                         "Notas adicionales (texto libre)",
                         value=profile.additional_context,
-                        height=200,
-                        help="Cualquier información adicional que no encaje en las otras secciones.",
+                        key=f"wgt_{selected_bank}_extra",
+                        height=220,
+                        help="Cultura corporativa, posicionamiento de mercado, desafíos, regulaciones específicas, planes de transformación digital, etc.",
                     )
                     if st.form_submit_button("💾 Guardar Contexto"):
                         profile.additional_context = p_extra
@@ -530,7 +994,7 @@ elif page == "📊 Fuente de la Verdad":
                         st.success("Contexto adicional guardado.")
                         st.rerun()
 
-            # ---- TAB: JSON Completo ----
+            # ── TAB: JSON Completo ───────────────────────────────────────
             with tab_json:
                 st.subheader("🔧 Perfil JSON Completo")
                 st.caption("Vista del perfil completo en formato JSON. Puedes editarlo directamente.")
