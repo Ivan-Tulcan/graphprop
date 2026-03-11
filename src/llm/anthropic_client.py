@@ -65,8 +65,13 @@ class AnthropicClient(BaseLLMClient):
         if "system" in kwargs:
             api_kwargs["system"] = kwargs.pop("system")
 
-        # Extended Thinking Mode: adds a 'thinking' budget
-        if self.enable_thinking:
+        # Extended Thinking Mode: only supported on Claude 3.7+ and Claude 4+
+        model_supports_thinking = (
+            "3-7" in self.model
+            or "opus-4" in self.model
+            or "sonnet-4-6" in self.model
+        )
+        if self.enable_thinking and model_supports_thinking:
             api_kwargs["thinking"] = {
                 "type": "enabled",
                 "budget_tokens": kwargs.get("thinking_budget", self.thinking_budget),

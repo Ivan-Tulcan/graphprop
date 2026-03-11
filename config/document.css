@@ -1,8 +1,7 @@
 /* 
  * Synthetic Document Factory — Corporate PDF Stylesheet
  *
- * Applied by WeasyPrint when rendering HTML (from Pandoc-converted Markdown)
- * into high-fidelity PDFs for banking-sector documents.
+ * Compatible with both WeasyPrint and xhtml2pdf renderers.
  */
 
 /* ---------- Page Setup ---------- */
@@ -10,8 +9,9 @@
     size: A4;
     margin: 2.5cm 2cm 2.5cm 2cm;
 
+    /* WeasyPrint page margin boxes */
     @top-center {
-        content: "CONFIDENTIAL";
+        content: "CONFIDENCIAL";
         font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
         font-size: 8pt;
         color: #999;

@@ -8,6 +8,7 @@ Converts generated Markdown documents into high-fidelity corporate PDFs:
 """
 
 import subprocess
+import re
 import shutil
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -114,76 +115,19 @@ class PDFRenderer:
             logger.warning("Pandoc failed, using fallback converter: %s", exc)
             return self._fallback_convert(markdown)
 
-    def _fallback_convert(self, markdown: str) -> str:
+    def _fallback_convert(self, markdown_text: str) -> str:
         """
-        Simple fallback Markdown→HTML converter.
+        Convert Markdown to HTML using the Python 'markdown' library.
 
-        Handles basic Markdown constructs when pandoc is not installed.
+        Supports tables, fenced code blocks, and all standard Markdown
+        syntax — handles accented characters and Unicode correctly.
         """
-        import re
+        import markdown as md
 
-        html_lines: list[str] = []
-        in_code_block = False
-        in_list = False
-
-        for line in markdown.split("\n"):
-            # Fenced code blocks
-            if line.strip().startswith("```"):
-                if in_code_block:
-                    html_lines.append("</code></pre>")
-                    in_code_block = False
-                else:
-                    html_lines.append("<pre><code>")
-                    in_code_block = True
-                continue
-
-            if in_code_block:
-                html_lines.append(line)
-                continue
-
-            stripped = line.strip()
-
-            # Headers
-            if stripped.startswith("######"):
-                html_lines.append(f"<h6>{stripped[6:].strip()}</h6>")
-            elif stripped.startswith("#####"):
-                html_lines.append(f"<h5>{stripped[5:].strip()}</h5>")
-            elif stripped.startswith("####"):
-                html_lines.append(f"<h4>{stripped[4:].strip()}</h4>")
-            elif stripped.startswith("###"):
-                html_lines.append(f"<h3>{stripped[3:].strip()}</h3>")
-            elif stripped.startswith("##"):
-                html_lines.append(f"<h2>{stripped[2:].strip()}</h2>")
-            elif stripped.startswith("#"):
-                html_lines.append(f"<h1>{stripped[1:].strip()}</h1>")
-            elif stripped.startswith("---") or stripped.startswith("***"):
-                html_lines.append("<hr>")
-            elif stripped.startswith("- ") or stripped.startswith("* "):
-                if not in_list:
-                    html_lines.append("<ul>")
-                    in_list = True
-                html_lines.append(f"<li>{stripped[2:]}</li>")
-            elif stripped.startswith(">"):
-                html_lines.append(f"<blockquote><p>{stripped[1:].strip()}</p></blockquote>")
-            elif stripped == "":
-                if in_list:
-                    html_lines.append("</ul>")
-                    in_list = False
-                html_lines.append("")
-            else:
-                if in_list:
-                    html_lines.append("</ul>")
-                    in_list = False
-                # Apply inline formatting
-                processed = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', stripped)
-                processed = re.sub(r'\*(.+?)\*', r'<em>\1</em>', processed)
-                processed = re.sub(r'`(.+?)`', r'<code>\1</code>', processed)
-                html_lines.append(f"<p>{processed}</p>")
-
-        if in_list:
-            html_lines.append("</ul>")
-
-        return "\n".join(html_lines)
+        return md.markdown(
+            markdown_text,
+            extensions=["tables", "fenced_code", "nl2br", "sane_lists"],
+        )
 
     # ------------------------------------------------------------------
     # Step 2: Wrap HTML with CSS
@@ -225,21 +169,59 @@ class PDFRenderer:
 </html>"""
 
     # ------------------------------------------------------------------
-    # Step 3: HTML → PDF via WeasyPrint
+    # Step 3: HTML → PDF via WeasyPrint (with xhtml2pdf fallback)
     # ------------------------------------------------------------------
 
     def _html_to_pdf(self, html: str, output_path: Path) -> None:
-        """Render the HTML string to a PDF file using WeasyPrint."""
+        """
+        Render the HTML string to a PDF file.
+
+        Tries WeasyPrint first (best quality, requires GTK system libs).
+        Falls back to xhtml2pdf (pure Python, works on all platforms).
+        """
+        # Try WeasyPrint first
         try:
             from weasyprint import HTML
-
             HTML(string=html).write_pdf(str(output_path))
             logger.debug("WeasyPrint rendered PDF: %s", output_path)
+            return
+        except (ImportError, OSError) as exc:
+            logger.info("WeasyPrint unavailable (%s), using xhtml2pdf fallback.", exc)
+
+        # Fallback: xhtml2pdf (pure Python, no system libs required)
+        try:
+            from xhtml2pdf import pisa
+
+            # xhtml2pdf does not support @page margin boxes (@top-center, etc.)
+            # Strip them with regex to avoid its CSS parser raising TypeError.
+            clean_html = re.sub(
+                r'@(?:top|bottom|left|right)-[a-z-]+\s*\{[^}]*\}',
+                '',
+                html,
+            )
+
+            # Encode to UTF-8 bytes so xhtml2pdf handles accented characters
+            # correctly without Latin-1 mojibake (ÃÂ³ instead of ó etc.)
+            html_bytes = clean_html.encode("utf-8")
+            with open(output_path, "wb") as pdf_file:
+                result = pisa.CreatePDF(
+                    html_bytes,
+                    dest=pdf_file,
+                    encoding="utf-8",
+                )
+
+            if result.err:
+                raise RenderingError(
+                    f"xhtml2pdf reported {result.err} error(s) during rendering."
+                )
+            logger.debug("xhtml2pdf rendered PDF: %s", output_path)
         except ImportError:
             raise RenderingError(
-                "WeasyPrint is not installed. "
-                "Install it with: pip install weasyprint"
+                "No PDF renderer available. Install weasyprint (with GTK) "
+                "or xhtml2pdf: pip install xhtml2pdf"
             )
+        except RenderingError:
+            raise
         except Exception as exc:
             raise RenderingError(f"PDF rendering failed: {exc}") from exc
 

@@ -23,8 +23,8 @@ class Settings:
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 
     # --- Model identifiers ---
-    ANTHROPIC_MODEL: str = "claude-3-7-sonnet-20250219"
-    OPENAI_MODEL: str = "gpt-5.2-pro"
+    ANTHROPIC_MODEL: str = "claude-sonnet-4-5-20250929"
+    OPENAI_MODEL: str = "gpt-4o"
 
     # --- Paths ---
     PROJECT_ROOT: Path = _PROJECT_ROOT

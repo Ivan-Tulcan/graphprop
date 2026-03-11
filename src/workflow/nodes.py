@@ -98,21 +98,23 @@ def generate_skeleton(state: WorkflowState) -> dict[str, Any]:
 
     # Build the prompt with seed context
     system_prompt = (
-        "You are a senior banking document architect. Generate a detailed JSON "
-        "skeleton for a document. The JSON must conform exactly to the provided "
-        "schema. Use ONLY the entities and facts provided — do NOT invent names, "
-        "IDs, dates, or budget figures that are not in the seed data.\n\n"
-        f"Document type: {doc_type}\n"
-        f"Schema (Pydantic): {json.dumps(schema_class.model_json_schema(), indent=2)}"
+        "Eres un arquitecto senior de documentación bancaria. Genera un esqueleto JSON detallado "
+        "para un documento. El JSON debe seguir exactamente el esquema proporcionado. "
+        "Usa ÚNICAMENTE las entidades y datos proporcionados — NO inventes nombres, "
+        "IDs, fechas ni cifras presupuestarias que no estén en los datos semilla.\n\n"
+        "IMPORTANTE: Todos los textos dentro del JSON (títulos, secciones, puntos clave, "
+        "restricciones, criterios) deben estar escritos en ESPAÑOL.\n\n"
+        f"Tipo de documento: {doc_type}\n"
+        f"Esquema (Pydantic): {json.dumps(schema_class.model_json_schema(), indent=2)}"
     )
 
     user_prompt = (
-        "Generate the JSON skeleton using this seed data:\n\n"
-        f"**Bank:**\n```json\n{json.dumps(bank_data, indent=2, default=str)}\n```\n\n"
-        f"**Project:**\n```json\n{json.dumps(project_data, indent=2, default=str)}\n```\n\n"
-        f"**Personnel:**\n```json\n{json.dumps(personnel_data, indent=2, default=str)}\n```\n\n"
-        f"**Regulations:**\n```json\n{json.dumps(regulations_data, indent=2, default=str)}\n```\n\n"
-        "Return ONLY the valid JSON object, no markdown fences or commentary."
+        "Genera el esqueleto JSON usando estos datos semilla:\n\n"
+        f"**Banco:**\n```json\n{json.dumps(bank_data, indent=2, default=str)}\n```\n\n"
+        f"**Proyecto:**\n```json\n{json.dumps(project_data, indent=2, default=str)}\n```\n\n"
+        f"**Personal:**\n```json\n{json.dumps(personnel_data, indent=2, default=str)}\n```\n\n"
+        f"**Regulaciones:**\n```json\n{json.dumps(regulations_data, indent=2, default=str)}\n```\n\n"
+        "Devuelve ÚNICAMENTE el objeto JSON válido, sin bloques markdown ni comentarios."
     )
 
     client = get_llm_client("openai")
@@ -166,31 +168,31 @@ def draft_content(state: WorkflowState) -> dict[str, Any]:
     if audit_issues:
         issues_text = "\n".join(f"- {issue}" for issue in audit_issues)
         revision_note = (
-            "\n\n**REVISION REQUIRED:** The previous draft failed audit. "
-            "Fix the following issues:\n" + issues_text
+            "\n\n**REVISIÓN REQUERIDA:** El borrador anterior no pasó la auditoría. "
+            "Corrige los siguientes problemas:\n" + issues_text
         )
 
     system_prompt = (
-        "You are a senior technical writer specializing in banking-sector "
-        "documentation. Write professional, detailed Markdown content for the "
-        "document skeleton below.\n\n"
-        "CRITICAL RULES:\n"
-        "1. Use ONLY the entity names, IDs, dates, and budget figures from "
-        "   the seed data. Do NOT invent any new entities.\n"
-        "2. Reference personnel by their full name and role.\n"
-        "3. Reference regulations by their official code.\n"
-        "4. Maintain consistent budget figures across all sections.\n"
-        "5. Use proper Markdown formatting with headers, lists, and tables.\n"
-        "6. Each section should be substantive (200-400 words).\n"
-        "7. Include a document header with metadata (title, project ID, date)."
+        "Eres un redactor técnico senior especializado en documentación del sector bancario. "
+        "Redacta contenido Markdown profesional y detallado para el esqueleto de documento indicado.\n\n"
+        "REGLAS CRÍTICAS:\n"
+        "1. Usa ÚNICAMENTE los nombres de entidades, IDs, fechas y cifras presupuestarias "
+        "   de los datos semilla. NO inventes ninguna entidad nueva.\n"
+        "2. Menciona al personal por su nombre completo y cargo.\n"
+        "3. Menciona las regulaciones por su código oficial.\n"
+        "4. Mantén cifras presupuestarias consistentes en todas las secciones.\n"
+        "5. Usa formato Markdown correcto con encabezados, listas y tablas.\n"
+        "6. Cada sección debe ser sustancial (200-400 palabras).\n"
+        "7. Incluye un encabezado con metadatos (título, ID de proyecto, fecha).\n"
+        "8. TODO el documento debe estar escrito en ESPAÑOL."
     )
 
     user_prompt = (
-        f"**Document Skeleton:**\n```json\n{json.dumps(skeleton, indent=2, default=str)}\n```\n\n"
-        f"**Bank Context:**\n```json\n{json.dumps(bank_data, indent=2, default=str)}\n```\n\n"
-        f"**Project Context:**\n```json\n{json.dumps(project_data, indent=2, default=str)}\n```\n\n"
-        f"**Personnel:**\n```json\n{json.dumps(personnel_data, indent=2, default=str)}\n```\n\n"
-        "Write the complete Markdown document now. Output ONLY the Markdown content."
+        f"**Esqueleto del documento:**\n```json\n{json.dumps(skeleton, indent=2, default=str)}\n```\n\n"
+        f"**Contexto del banco:**\n```json\n{json.dumps(bank_data, indent=2, default=str)}\n```\n\n"
+        f"**Contexto del proyecto:**\n```json\n{json.dumps(project_data, indent=2, default=str)}\n```\n\n"
+        f"**Personal:**\n```json\n{json.dumps(personnel_data, indent=2, default=str)}\n```\n\n"
+        "Redacta el documento Markdown completo ahora. Responde ÚNICAMENTE con el contenido Markdown en español."
         + revision_note
     )
 
