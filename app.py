@@ -329,8 +329,8 @@ page = st.sidebar.radio(
         "📁 Proyectos",
         "👥 Personal",
         "📜 Regulaciones",
-        "� Generar Documentos",
-        "�📄 Documentos Generados",
+        "🚀 Generar Documentos",
+        "📄 Documentos Generados",
     ],
 )
 
