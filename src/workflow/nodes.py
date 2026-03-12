@@ -9,6 +9,7 @@ Each function is a node in the document-generation state graph:
 """
 
 import json
+import re
 from datetime import date
 from typing import Any
 
@@ -332,6 +333,12 @@ def draft_content(state: WorkflowState) -> dict[str, Any]:
         system=system_prompt,
         max_tokens=16000,
     )
+
+    # Claude sometimes wraps the entire response in a ```markdown ... ``` code fence.
+    # Strip it so the content is processed as plain Markdown, not a code block.
+    markdown = re.sub(r"^\s*```[a-zA-Z]*\s*\n", "", markdown)
+    markdown = re.sub(r"\n```\s*$", "", markdown)
+    markdown = markdown.strip()
 
     # Merge token usage
     prev_usage = state.get("token_usage", {})

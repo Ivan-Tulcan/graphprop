@@ -103,15 +103,14 @@ class PDFRenderer:
                     "--to=html5",
                     "--no-highlight",
                 ],
-                input=markdown,
+                input=markdown.encode("utf-8"),  # explicit UTF-8 bytes to pandoc
                 capture_output=True,
-                text=True,
                 timeout=30,
                 check=True,
             )
             logger.debug("Pandoc conversion successful")
-            return result.stdout
-        except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+            return result.stdout.decode("utf-8")  # decode pandoc output as UTF-8
+        except (subprocess.CalledProcessError, FileNotFoundError, UnicodeError) as exc:
             logger.warning("Pandoc failed, using fallback converter: %s", exc)
             return self._fallback_convert(markdown)
 
@@ -200,14 +199,12 @@ class PDFRenderer:
                 html,
             )
 
-            # Encode to UTF-8 bytes so xhtml2pdf handles accented characters
-            # correctly without Latin-1 mojibake (ÃÂ³ instead of ó etc.)
-            html_bytes = clean_html.encode("utf-8")
+            # Pass HTML as a string so xhtml2pdf uses the <meta charset="utf-8">
+            # declared in the document — avoids Latin-1 mojibake on Windows.
             with open(output_path, "wb") as pdf_file:
                 result = pisa.CreatePDF(
-                    html_bytes,
+                    clean_html,
                     dest=pdf_file,
-                    encoding="utf-8",
                 )
 
             if result.err:

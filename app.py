@@ -1542,7 +1542,8 @@ elif page == "🚀 Generar Documentos":
                                         project_id=_sel_proj.project_id,
                                         doc_type=_gdt,
                                     )
-                                    _final_md = _res.get("final_markdown", "")
+                                    # Use `or ""` to handle both missing key and None value
+                                    _final_md = (_res.get("final_markdown") or "").strip()
                                     if not _final_md:
                                         with _gen_results:
                                             st.warning(
