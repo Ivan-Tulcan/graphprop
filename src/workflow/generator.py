@@ -58,8 +58,10 @@ class DocumentGenerator:
         # Run the compiled LangGraph
         final_state = self.graph.invoke(initial_state)
 
-        # If audit never fully passed but retries exhausted, use last markdown
-        if "final_markdown" not in final_state and "markdown" in final_state:
+        # If audit never fully passed but retries exhausted, use last markdown.
+        # Also handle edge cases where final_markdown exists but is None/empty.
+        final_markdown = final_state.get("final_markdown")
+        if (not final_markdown) and ("markdown" in final_state):
             logger.warning("Using unaudited draft as final output.")
             final_state["final_markdown"] = final_state["markdown"]
 

@@ -117,7 +117,7 @@ def generate(
                     doc_type=doc_type,
                 )
 
-                final_md = result.get("final_markdown", "")
+                final_md = (result.get("final_markdown") or "").strip()
                 if not final_md:
                     console.print(f"[yellow]Warning:[/yellow] No content generated for document {i}")
                     progress.update(task, description=f"[yellow]Skipped {i}/{count}[/yellow]")
