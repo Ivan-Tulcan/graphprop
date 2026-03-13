@@ -1,4 +1,4 @@
-##  Synthetic Document Factory (SDF) - Banking Domain
+##  Synthetic Document Factory (SDF) 
 Este repositorio contiene el sistema auxiliar Synthetic Document Factory (SDF).
 Nota Importante: Este sistema no es el proyecto central de tesis. Es una herramienta utilitaria diseñada para generar el corpus de datos sintéticos de alta fidelidad (RFPs, anexos técnicos, normativas, historiales de proyectos) necesario para poblar e inicializar el sistema GraphRAG (Grafo de Conocimiento + RAG) que conforma el núcleo de la tesis.
 ##  Propósito
