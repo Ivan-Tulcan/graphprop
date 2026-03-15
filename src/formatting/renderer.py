@@ -11,6 +11,9 @@ import subprocess
 import re
 import shutil
 import xml.etree.ElementTree as ET
+import base64
+import zlib
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -66,6 +69,9 @@ class PDFRenderer:
         """
         logger.info("Rendering PDF: %s", filename)
 
+        # Step 0: Render architecture diagrams using Kroki (C4-PlantUML / Mermaid)
+        markdown = self._process_kroki_diagrams(markdown)
+
         # Step 1: Convert Markdown → HTML5
         html = self._markdown_to_html(markdown)
 
@@ -84,8 +90,48 @@ class PDFRenderer:
         return pdf_path
 
     # ------------------------------------------------------------------
-    # Step 1: Markdown → HTML
+    # Step 1: Markdown → HTML & Diagram Processing
     # ------------------------------------------------------------------
+
+    def _process_kroki_diagrams(self, markdown: str) -> str:
+        """
+        Intercept diagram code blocks (C4-PlantUML, PlantUML, Mermaid) and 
+        replace them with rendered images from the Kroki API using Data URIs.
+        Falls back to the raw code block if API fails.
+        """
+        pattern = re.compile(r'```(c4plantuml|plantuml|mermaid)\s*\n(.*?)```', flags=re.DOTALL | re.IGNORECASE)
+
+        def replacer(match: re.Match) -> str:
+            diag_type = match.group(1).strip().lower()
+            code = match.group(2).strip()
+
+            try:
+                # 1. Compress with zlib
+                compressed = zlib.compress(code.encode('utf-8'), 9)
+                # 2. URL-safe Base64 encode
+                encoded = base64.urlsafe_b64encode(compressed).decode('ascii')
+                
+                # 3. Fetch from Kroki
+                url = f"https://kroki.io/{diag_type}/png/{encoded}"
+                req = urllib.request.Request(url, headers={'User-Agent': 'SDF-C4-Renderer/1.0'})
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    img_data = resp.read()
+                    
+                # 4. Base64 encode the received PNG bytes
+                b64_img = base64.b64encode(img_data).decode('ascii')
+                data_uri = f"data:image/png;base64,{b64_img}"
+                
+                # Return standard HTML <img> tag
+                return (
+                    f'\n<div class="diagram-render" style="text-align: center; margin: 20px 0;">\n'
+                    f'  <img src="{data_uri}" alt="{diag_type} Diagram" style="max-width: 100%; height: auto;" />\n'
+                    f'</div>\n'
+                )
+            except Exception as exc:
+                logger.warning("Kroki API render failed for %s: %s. Using fallback.", diag_type, exc)
+                return match.group(0)
+
+        return pattern.sub(replacer, markdown)
 
     def _markdown_to_html(self, markdown: str) -> str:
         """Convert Markdown to HTML5, using pandoc if available."""
