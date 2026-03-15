@@ -123,8 +123,34 @@ def generate(
                     progress.update(task, description=f"[yellow]Skipped {i}/{count}[/yellow]")
                     continue
 
-                # Build metadata for XMP injection
                 project_data = result.get("project", {})
+                
+                # Setup specific folder structure based on bank and project name
+                from src.database.models import get_session
+                from src.database.repository import get_bank_by_id
+                
+                b_name = project_data.get("bank_id", "UnknownBank")
+                p_name = project_data.get("project_id", project_id)
+                session = get_session()
+                try:
+                    p_obj = get_project_by_id(session, project_id)
+                    if p_obj:
+                        p_name = p_obj.name
+                        b_obj = get_bank_by_id(session, p_obj.bank_id)
+                        if b_obj:
+                            b_name = b_obj.name
+                finally:
+                    session.close()
+
+                import re
+                def _sanitize(name: str) -> str:
+                    return re.sub(r'[\\/*?:"<>|]', "", name).strip()
+                
+                specific_out = out_path / _sanitize(b_name) / _sanitize(p_name) / "RFP"
+                specific_out.mkdir(parents=True, exist_ok=True)
+                renderer.output_dir = specific_out
+
+                # Build metadata for XMP injection
                 skeleton = result.get("skeleton", {})
                 xmp_metadata = {
                     "title": skeleton.get("metadata", {}).get("title", f"{doc_type}_{project_id}"),
@@ -135,7 +161,11 @@ def generate(
                 }
 
                 # Render PDF
-                filename = f"{doc_type}_{project_id}_{i:03d}"
+                from datetime import datetime
+                ts = datetime.now().strftime("%Y%m%d")
+                filename = f"{_sanitize(p_name)}_{doc_type.upper()}_{ts}"
+                if count > 1:
+                    filename += f"_{i:03d}"
                 pdf_path = renderer.render(
                     markdown=final_md,
                     filename=filename,

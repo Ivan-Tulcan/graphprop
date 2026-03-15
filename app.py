@@ -317,6 +317,42 @@ _DOC_TYPE_META: dict[str, tuple[str, str, str]] = {
 
 
 # ---------------------------------------------------------------------------
+# Folder Structure Sync
+# ---------------------------------------------------------------------------
+
+import re
+
+def _sanitize_name(name: str) -> str:
+    """Remove special characters from strings to be used as folder or file names."""
+    return re.sub(r'[\\/*?:"<>|]', "", name).strip()
+
+def _sync_folder_structure() -> None:
+    """Ensure the Bank/Project/RFP folder structure exists for all entities."""
+    session = _get_db()
+    try:
+        from src.database.repository import get_all_banks, get_all_projects
+        banks = get_all_banks(session)
+        projects = get_all_projects(session)
+        bank_map = {b.bank_id: b.name for b in banks}
+
+        # Sync base bank folders
+        for b in banks:
+            b_dir = settings.OUTPUT_DIR / _sanitize_name(b.name)
+            b_dir.mkdir(parents=True, exist_ok=True)
+
+        # Sync project folders inside banks
+        for p in projects:
+            b_name = bank_map.get(p.bank_id, "UnknownBank")
+            p_dir = settings.OUTPUT_DIR / _sanitize_name(b_name) / _sanitize_name(p.name) / "RFP"
+            p_dir.mkdir(parents=True, exist_ok=True)
+    finally:
+        session.close()
+
+if "folders_synced" not in st.session_state:
+    _sync_folder_structure()
+    st.session_state.folders_synced = True
+
+# ---------------------------------------------------------------------------
 # Sidebar navigation
 # ---------------------------------------------------------------------------
 
@@ -418,6 +454,7 @@ if page == "🏢 Bancos":
                     )
                     insert_bank(session, entity)
                     session.commit()
+                    _sync_folder_structure()
                     st.success(f"Banco '{name}' guardado correctamente.")
                     st.rerun()
 
@@ -1180,6 +1217,7 @@ elif page == "📁 Proyectos":
                     )
                     insert_project(session, entity)
                     session.commit()
+                    _sync_folder_structure()
                     st.success(f"Proyecto '{proj_name}' guardado correctamente.")
                     st.rerun()
 
@@ -1567,8 +1605,14 @@ elif page == "🚀 Generar Documentos":
                                             "stakeholder_ids", []
                                         ),
                                     }
-                                    _ts = _gen_dt.now().strftime("%Y%m%d_%H%M%S")
-                                    _fname = f"{_gdt}_{_sel_proj.project_id}_{_ts}"
+                                    _b_name = _sanitize_name(_gen_bank_map[_sel_bank_id])
+                                    _p_name = _sanitize_name(_sel_proj.name)
+                                    _out_dir = settings.OUTPUT_DIR / _b_name / _p_name / "RFP"
+                                    _out_dir.mkdir(parents=True, exist_ok=True)
+                                    
+                                    _gen_renderer.output_dir = _out_dir
+                                    _ts = _gen_dt.now().strftime("%Y%m%d")
+                                    _fname = f"{_p_name}_{_gdt.upper()}_{_ts}"
                                     _pdf = _gen_renderer.render(
                                         markdown=_final_md,
                                         filename=_fname,
@@ -1619,8 +1663,8 @@ elif page == "📄 Documentos Generados":
 
     output_dir = settings.OUTPUT_DIR
 
-    # Scan output directory for PDF + XMP pairs
-    pdf_files = sorted(output_dir.glob("*.pdf"), key=lambda f: f.stat().st_mtime, reverse=True)
+    # Scan output directory for PDF + XMP pairs, looking recursively
+    pdf_files = sorted(output_dir.rglob("*.pdf"), key=lambda f: f.stat().st_mtime, reverse=True)
 
     if not pdf_files:
         st.info("No se han generado documentos aún. Usa el CLI o la pestaña de generación.")
