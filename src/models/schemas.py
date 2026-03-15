@@ -52,29 +52,30 @@ class SectionSkeleton(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class RFPParticipationEvent(BaseModel):
+    event_name: str = Field(..., description="Name of the event (e.g., 'Entrega de propuestas', 'Defensas técnicas')")
+    target_date: str = Field(..., description="Estimated date for the event")
+    description: str = Field(..., description="Details about what is expected in this event")
+
 class RFPSkeleton(BaseModel):
     """JSON skeleton for a Request for Proposals document."""
     metadata: DocumentMetadata
     executive_summary_points: list[str] = Field(
         ..., description="Key points for the executive summary"
     )
-    scope_of_work: list[SectionSkeleton] = Field(
-        ..., description="Sections defining the scope of work"
-    )
-    technical_requirements: list[SectionSkeleton] = Field(
-        ..., description="Technical requirement sections"
+    objectives_and_constraints: list[str] = Field(
+        ..., description="Clear business need, primary objectives, and constraints. Keep it high-level."
     )
     compliance_requirements: list[str] = Field(
         default_factory=list,
         description="Regulation codes this RFP must reference",
     )
-    budget_constraints: dict[str, float] = Field(
-        default_factory=dict,
-        description="Budget breakdown constraints from seed data",
+    budget_range: str = Field(
+        default="",
+        description="Estimated budget range (e.g., 'USD 1.5M - 2.0M')",
     )
-    timeline_milestones: list[dict[str, str]] = Field(
-        default_factory=list,
-        description="Key milestones with target dates",
+    participation_process: list[RFPParticipationEvent] = Field(
+        ..., description="Detailed timeline of the RFP participation process (Q&A, submissions, defenses, selection, negotiations)"
     )
     evaluation_criteria: list[str] = Field(
         default_factory=list,
@@ -86,15 +87,20 @@ class RFPSkeleton(BaseModel):
 # Project History Skeleton
 # ---------------------------------------------------------------------------
 
+class ProjectMilestone(BaseModel):
+    milestone_name: str = Field(..., description="Name of the milestone")
+    main_tasks: list[str] = Field(..., description="Key tasks performed during this milestone")
+    status: str = Field(..., description="Current status: 'Realizado', 'Atrasado', or 'A tiempo'")
+    comment: str = Field(..., description="Complementary comment regarding the status and outcomes")
 
 class ProjectHistorySkeleton(BaseModel):
     """JSON skeleton for a Project History / Status Report."""
     metadata: DocumentMetadata
     project_overview_points: list[str] = Field(
-        ..., description="Key points about the project"
+        ..., description="Key points about the project summary"
     )
-    phase_sections: list[SectionSkeleton] = Field(
-        ..., description="Sections covering each project phase"
+    timeline_milestones: list[ProjectMilestone] = Field(
+        ..., description="Chronological list of project milestones with status tracking"
     )
     stakeholder_contributions: list[dict[str, str]] = Field(
         default_factory=list,
@@ -140,12 +146,21 @@ class MeetingMinutesSkeleton(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class ArchitectureDiagram(BaseModel):
+    title: str = Field(..., description="Title of the architecture diagram")
+    description: str = Field(..., description="Brief description of the AS-IS or TO-BE architecture")
+    mermaid_code: str = Field(..., description="Mermaid.js code for the diagram (e.g. flowchart or block diagram)")
+
 class TechnicalAnnexSkeleton(BaseModel):
     """JSON skeleton for a Technical Annex (specs/requirements detail attached to an RFP)."""
     metadata: DocumentMetadata
     scope_summary: list[str] = Field(
         default_factory=list,
         description="High-level summary of the annex scope (3-5 bullet points)",
+    )
+    architecture_diagrams: list[ArchitectureDiagram] = Field(
+        default_factory=list,
+        description="Relevant architecture diagrams (AS-IS/TO-BE) using Mermaid.js",
     )
     technical_sections: list[SectionSkeleton] = Field(
         default_factory=list,

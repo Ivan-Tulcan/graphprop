@@ -301,12 +301,14 @@ def draft_content(state: WorkflowState) -> dict[str, Any]:
         "3. Menciona las regulaciones por su código oficial.\n"
         "4. Mantén cifras presupuestarias consistentes en todas las secciones.\n"
         "5. Usa formato Markdown correcto con encabezados, listas y tablas.\n"
-        "6. Cada sección debe ser sustancial (200-400 palabras).\n"
-        "7. Incluye un encabezado con metadatos (título, ID de proyecto, fecha).\n"
-        "8. TODO el documento debe estar escrito en ESPAÑOL.\n"
-        "9. Si se proporciona el perfil del banco (fuente de la verdad), úsalo para "
-        "   contextualizar el documento con información real sobre la arquitectura, "
-        "   stack tecnológico, canales, procesos y evolución del banco."
+        "6. TODO el documento debe estar escrito en ESPAÑOL.\n"
+        "7. Si el documento es un RFP, el contenido DEBE ser conciso (máximo 6 páginas) enfocándose firmemente en la necesidad de negocio, objetivos, restricciones y en detallar el PROCESO DE PARTICIPACIÓN (fechas de hitos del RFP). El presupuesto debe ser solo un rango si aplica.\n"
+        "8. Si el documento es un Historial o Resumen de Proyecto (project_history), debe ser muy resumido (máximo 4 páginas), mostrando una tabla o línea de tiempo clara con el estado de las tareas (Realizado, Atrasado, A tiempo) y comentarios breves.\n"
+        "9. Si el documento contiene diagramas de arquitectura (ej. en el Anexo Técnico), formatea el código en un bloque estricto de ```mermaid\n ... \n``` para su renderizado.\n"
+        "10. Incluye un encabezado con metadatos (título, ID de proyecto, fecha).\n"
+        "11. Si se proporciona el perfil del banco (fuente de la verdad), úsalo para "
+        "    contextualizar el documento con información real sobre la arquitectura, "
+        "    stack tecnológico, canales, procesos y evolución del banco."
     )
 
     # Build bank profile context for draft
