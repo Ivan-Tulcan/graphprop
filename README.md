@@ -21,42 +21,42 @@ Base de Datos: sqlite3 / sqlalchemy
 ## Requisitos Previos e Instalación
 Dependencias del Sistema (OS)  
 Para que el motor de renderizado de PDFs funcione, necesitas instalar las siguientes dependencias a nivel de sistema operativo:  
-Ubuntu/Debian:  
+### Ubuntu/Debian:  
 sudo apt-get update  
 sudo apt-get install pandoc libpango-1.0-0 libpangoft2-1.0-0  
 
 
-macOS (Homebrew):  
+### macOS (Homebrew):  
 brew install pandoc pango  
 
 
-Configuración del Entorno Python  
-Clona el repositorio:  
+## Configuración del Entorno Python  
+### Clonar el repositorio:  
 git clone [https://github.com/tu-usuario/synthetic-document-factory.git](https://github.com/tu-usuario/synthetic-document-factory.git)  
 cd synthetic-document-factory  
 
 
-Crea y activa un entorno virtual:  
+### Crear y activa un entorno virtual:  
 python3.12 -m venv venv  
 source venv/bin/activate  # En Windows: venv\Scripts\activate  
 
 
-Instala las dependencias:  
+### Instalar las dependencias:  
 pip install -r requirements.txt  
 
 
-Configura las variables de entorno. Copia el archivo de ejemplo y añade tus API Keys:  
+### Configura las variables de entorno. Copia el archivo de ejemplo y añade tus API Keys:  
 cp .env.example .env  
 
 Asegúrate de incluir ANTHROPIC_API_KEY y OPENAI_API_KEY.  
 ##  Uso del Sistema
-1. Inicializar la Base de Datos Semilla
+### 1. Inicializar la Base de Datos Semilla
 Antes de generar documentos, debes poblar el universo ficticio:
 python scripts/seed_db.py
 
 
 Esto generará proyectos base (ej. PRJ-COR-001), normativas y perfiles de empleados en la base SQLite.
-2. Generar Documentos mediante CLI
+### 2. Generar Documentos mediante CLI
 El sistema expone una interfaz de línea de comandos (CLI) para orquestar la generación:
 Generar un RFP (Request for Proposal):
 python main.py generate --doc-type RFP --project-id PRJ-COR-001
