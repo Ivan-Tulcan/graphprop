@@ -11,44 +11,44 @@ Schema Generation Layer (Capa Estructural): Utiliza PydanticAI y modelos de razo
 Prose Expansion Layer (Capa Narrativa): Un flujo de trabajo cíclico orquestado con LangGraph. Toma el esqueleto y utiliza Claude 3.7 Sonnet (en modo de pensamiento extendido) para redactar el contenido largo y técnico en Markdown. Incluye nodos de auditoría para evitar alucinaciones.
 Rendering Layer (Capa de Formateo): Convierte el Markdown resultante en PDFs corporativos de alta fidelidad utilizando Pandoc y WeasyPrint, inyectando metadatos XMP (Project IDs) críticos para la posterior ingestión en Neo4j/GraphRAG.
 ## Stack Tecnológico (Marzo 2026)
-Lenguaje: Python 3.12+
-Orquestación y Estado: langgraph
-Validación y Tipado: pydantic-ai
-Optimización de Prompts: dspy
-Integración LLM: anthropic (Claude 3.7 Sonnet), openai (GPT-5.2 Pro)
-Renderizado PDF: pandoc, weasyprint
-Base de Datos: sqlite3 / sqlalchemy
+Lenguaje: Python 3.12+  
+Orquestación y Estado: langgraph  
+Validación y Tipado: pydantic-ai  
+Optimización de Prompts: dspy  
+Integración LLM: anthropic (Claude 3.7 Sonnet), openai (GPT-5.2 Pro)  
+Renderizado PDF: pandoc, weasyprint  
+Base de Datos: sqlite3 / sqlalchemy  
 ## Requisitos Previos e Instalación
-Dependencias del Sistema (OS)
-Para que el motor de renderizado de PDFs funcione, necesitas instalar las siguientes dependencias a nivel de sistema operativo:
-Ubuntu/Debian:
-sudo apt-get update
-sudo apt-get install pandoc libpango-1.0-0 libpangoft2-1.0-0
+Dependencias del Sistema (OS)  
+Para que el motor de renderizado de PDFs funcione, necesitas instalar las siguientes dependencias a nivel de sistema operativo:  
+Ubuntu/Debian:  
+sudo apt-get update  
+sudo apt-get install pandoc libpango-1.0-0 libpangoft2-1.0-0  
 
 
-macOS (Homebrew):
-brew install pandoc pango
+macOS (Homebrew):  
+brew install pandoc pango  
 
 
-Configuración del Entorno Python
-Clona el repositorio:
-git clone [https://github.com/tu-usuario/synthetic-document-factory.git](https://github.com/tu-usuario/synthetic-document-factory.git)
-cd synthetic-document-factory
+Configuración del Entorno Python  
+Clona el repositorio:  
+git clone [https://github.com/tu-usuario/synthetic-document-factory.git](https://github.com/tu-usuario/synthetic-document-factory.git)  
+cd synthetic-document-factory  
 
 
-Crea y activa un entorno virtual:
-python3.12 -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
+Crea y activa un entorno virtual:  
+python3.12 -m venv venv  
+source venv/bin/activate  # En Windows: venv\Scripts\activate  
 
 
-Instala las dependencias:
-pip install -r requirements.txt
+Instala las dependencias:  
+pip install -r requirements.txt  
 
 
-Configura las variables de entorno. Copia el archivo de ejemplo y añade tus API Keys:
-cp .env.example .env
+Configura las variables de entorno. Copia el archivo de ejemplo y añade tus API Keys:  
+cp .env.example .env  
 
-Asegúrate de incluir ANTHROPIC_API_KEY y OPENAI_API_KEY.
+Asegúrate de incluir ANTHROPIC_API_KEY y OPENAI_API_KEY.  
 ##  Uso del Sistema
 1. Inicializar la Base de Datos Semilla
 Antes de generar documentos, debes poblar el universo ficticio:
