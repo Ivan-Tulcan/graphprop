@@ -11,6 +11,8 @@ sqlalchemy>=2.0.0
 
 # PDF Rendering
 weasyprint>=62.0
+xhtml2pdf>=0.2.15
+markdown>=3.4.0
 
 # Utilities
 python-dotenv>=1.0.0
