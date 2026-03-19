@@ -106,18 +106,27 @@ class PDFRenderer:
             code = match.group(2).strip()
 
             try:
-                # 1. Compress with zlib
-                compressed = zlib.compress(code.encode('utf-8'), 9)
-                # 2. URL-safe Base64 encode
-                encoded = base64.urlsafe_b64encode(compressed).decode('ascii')
+                # Use POST to Kroki to avoid GET URL length limits for large diagrams
+                import json
                 
-                # 3. Fetch from Kroki
-                url = f"https://kroki.io/{diag_type}/png/{encoded}"
-                req = urllib.request.Request(url, headers={'User-Agent': 'SDF-C4-Renderer/1.0'})
-                with urllib.request.urlopen(req, timeout=15) as resp:
+                url = "https://kroki.io/"
+                payload = {
+                    "diagram_source": code,
+                    "diagram_type": diag_type,
+                    "output_format": "png"
+                }
+                
+                req = urllib.request.Request(
+                    url, 
+                    data=json.dumps(payload).encode('utf-8'),
+                    headers={'Content-Type': 'application/json', 'User-Agent': 'SDF-C4-Renderer/1.0'},
+                    method='POST'
+                )
+                
+                with urllib.request.urlopen(req, timeout=20) as resp:
                     img_data = resp.read()
                     
-                # 4. Base64 encode the received PNG bytes
+                # Base64 encode the received PNG bytes
                 b64_img = base64.b64encode(img_data).decode('ascii')
                 data_uri = f"data:image/png;base64,{b64_img}"
                 

@@ -304,7 +304,7 @@ def draft_content(state: WorkflowState) -> dict[str, Any]:
         "6. TODO el documento debe estar escrito en ESPAÑOL.\n"
         "7. Si el documento es un RFP, el contenido DEBE ser conciso (máximo 6 páginas) enfocándose firmemente en la necesidad de negocio, objetivos, restricciones y en detallar el PROCESO DE PARTICIPACIÓN (fechas de hitos del RFP). El presupuesto debe ser solo un rango si aplica.\n"
         "8. Si el documento es un Historial o Resumen de Proyecto (project_history), debe ser muy resumido (máximo 4 páginas), mostrando una tabla o línea de tiempo clara con el estado de las tareas (Realizado, Atrasado, A tiempo) y comentarios breves.\n"
-        "9. Si el documento contiene diagramas de arquitectura (ej. en el Anexo Técnico), formatea el código usando estrictamente sintaxis C4-PlantUML y envuélvelo en un bloque de código como ```c4plantuml\n@startuml\n!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml\n ... \n@enduml\n``` detallando el nivel de detalle requerido (contexto o contenedores o componentes).\n"
+        "9. Si el documento contiene diagramas de arquitectura (ej. en el Anexo Técnico), formatea el código usando estrictamente sintaxis C4-PlantUML y envuélvelo en un bloque de código como ```c4plantuml\n@startuml\n!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml\n ... \n@enduml\n``` detallando el nivel de detalle requerido. MANTÉN LOS DIAGRAMAS CONCISOS. Cierra siempre el bloque con ``` al finalizar para que no se trunque.\n"
         "10. Incluye un encabezado con metadatos (título, ID de proyecto, fecha).\n"
         "11. Si se proporciona el perfil del banco (fuente de la verdad), úsalo para "
         "    contextualizar el documento con información real sobre la arquitectura, "
@@ -356,7 +356,7 @@ def draft_content(state: WorkflowState) -> dict[str, Any]:
             part_markdown = client.generate(
                 messages=[{"role": "user", "content": sub_user_prompt}],
                 system=system_prompt,
-                max_tokens=8000, # Lower limit per doc
+                max_tokens=16000, # Increased limit to avoid cutting off complex C4 diagrams
             )
 
             # Cleanup

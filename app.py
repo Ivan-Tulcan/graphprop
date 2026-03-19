@@ -1613,21 +1613,55 @@ elif page == "🚀 Generar Documentos":
                                     _gen_renderer.output_dir = _out_dir
                                     _ts = _gen_dt.now().strftime("%Y%m%d")
                                     _fname = f"{_p_name}_{_gdt.upper()}_{_ts}"
-                                    _pdf = _gen_renderer.render(
-                                        markdown=_final_md,
-                                        filename=_fname,
-                                        metadata=_xmp,
-                                    )
-                                    _gen_generated.append((
-                                        _gdt,
-                                        _glabel,
-                                        _pdf,
-                                        _res.get("token_usage", {}),
-                                    ))
-                                    with _gen_results:
-                                        st.success(
-                                            f"✅ **{_gicon} {_glabel}** — `{_pdf.name}`"
+                                    
+                                    import re
+                                    _split_pattern = r"===SPLIT_MARKER:(.*?)==="
+                                    _parts = re.split(_split_pattern, _final_md)
+
+                                    if len(_parts) > 1:
+                                        _start_idx = 1 if not _parts[0].strip() else 0
+                                        for _j in range(_start_idx, len(_parts), 2):
+                                            if _j + 1 >= len(_parts):
+                                                break
+                                            _suffix = _parts[_j].strip()
+                                            _content = _parts[_j+1].strip()
+                                            if not _content:
+                                                continue
+                                                
+                                            _safe_suffix = _sanitize_name(_suffix).replace(" ", "_")
+                                            _sub_fname = f"{_fname}_{_safe_suffix}"
+                                            _sub_xmp = _xmp.copy()
+                                            _sub_xmp["title"] = f"{_xmp['title']} - {_suffix}"
+
+                                            _pdf = _gen_renderer.render(
+                                                markdown=_content,
+                                                filename=_sub_fname,
+                                                metadata=_sub_xmp,
+                                            )
+                                            _gen_generated.append((
+                                                _gdt,
+                                                f"{_glabel} ({_suffix})",
+                                                _pdf,
+                                                _res.get("token_usage", {}),
+                                            ))
+                                            with _gen_results:
+                                                st.success(f"✅ **{_gicon} {_glabel} ({_suffix})** — `{_pdf.name}`")
+                                    else:
+                                        _pdf = _gen_renderer.render(
+                                            markdown=_final_md,
+                                            filename=_fname,
+                                            metadata=_xmp,
                                         )
+                                        _gen_generated.append((
+                                            _gdt,
+                                            _glabel,
+                                            _pdf,
+                                            _res.get("token_usage", {}),
+                                        ))
+                                        with _gen_results:
+                                            st.success(
+                                                f"✅ **{_gicon} {_glabel}** — `{_pdf.name}`"
+                                            )
                                 except Exception as _gexc:
                                     with _gen_results:
                                         st.error(f"❌ **{_glabel}**: {_gexc}")
