@@ -149,46 +149,27 @@ class MeetingMinutesSkeleton(BaseModel):
 class ArchitectureDiagram(BaseModel):
     title: str = Field(..., description="Title of the architecture diagram")
     description: str = Field(..., description="Brief description of the AS-IS or TO-BE architecture")
-    mermaid_code: str = Field(..., description="Mermaid.js code for the diagram (e.g. flowchart or block diagram)")
+    c4_plantuml_code: str = Field(..., description="C4-PlantUML code for the diagram. Must start with @startuml, include the appropriate C4 standard Library, define elements and relationships, and end with @enduml")
+
+
+class TechnicalSubDocument(BaseModel):
+    """A distinct technical document that will be generated as a separate PDF."""
+    title: str = Field(..., description="Title of this specific annex document (e.g., 'Arquitectura AS-IS', 'Requisitos Funcionales', 'Dimensionamiento').")
+    purpose: str = Field(..., description="Specific purpose of this document.")
+    content_sections: list[SectionSkeleton] = Field(..., description="Detailed content sections for this specific document.")
+    diagrams: list[ArchitectureDiagram] = Field(default_factory=list, description="Diagrams relevant to this specific document.")
+
 
 class TechnicalAnnexSkeleton(BaseModel):
-    """JSON skeleton for a Technical Annex (specs/requirements detail attached to an RFP)."""
+    """JSON skeleton for a collection of Technical Annexes."""
     metadata: DocumentMetadata
-    scope_summary: list[str] = Field(
-        default_factory=list,
-        description="High-level summary of the annex scope (3-5 bullet points)",
-    )
-    architecture_diagrams: list[ArchitectureDiagram] = Field(
-        default_factory=list,
-        description="Relevant architecture diagrams (AS-IS/TO-BE) using Mermaid.js",
-    )
-    technical_sections: list[SectionSkeleton] = Field(
-        default_factory=list,
-        description="Detailed technical requirement sections",
-    )
-    specifications: list[dict[str, str]] = Field(
-        default_factory=list,
-        description="Key-value specification pairs (requirement name -> detail)",
-    )
-    architecture_notes: list[str] = Field(
-        default_factory=list,
-        description="Architecture constraints referencing the bank's actual stack",
-    )
-    integration_points: list[str] = Field(
-        default_factory=list,
-        description="Bank systems and external APIs that must be integrated",
-    )
-    non_functional_requirements: list[SectionSkeleton] = Field(
-        default_factory=list,
-        description="Performance, security, and scalability requirement sections",
-    )
-    acceptance_criteria: list[str] = Field(
-        default_factory=list,
-        description="Measurable criteria that must be met for delivery acceptance",
+    sub_documents: list[TechnicalSubDocument] = Field(
+        ...,
+        description="List of separate technical documents (PDFs) to be generated. Examples: Architecture AS-IS, Architecture TO-BE, Requirements, Sizing, Security, etc."
     )
     references: list[str] = Field(
         default_factory=list,
-        description="Standards, regulations, and internal documents referenced",
+        description="Standards, regulations, and internal documents referenced across all annexes.",
     )
 
 

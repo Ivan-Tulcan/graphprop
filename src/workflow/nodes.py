@@ -304,7 +304,7 @@ def draft_content(state: WorkflowState) -> dict[str, Any]:
         "6. TODO el documento debe estar escrito en ESPAÑOL.\n"
         "7. Si el documento es un RFP, el contenido DEBE ser conciso (máximo 6 páginas) enfocándose firmemente en la necesidad de negocio, objetivos, restricciones y en detallar el PROCESO DE PARTICIPACIÓN (fechas de hitos del RFP). El presupuesto debe ser solo un rango si aplica.\n"
         "8. Si el documento es un Historial o Resumen de Proyecto (project_history), debe ser muy resumido (máximo 4 páginas), mostrando una tabla o línea de tiempo clara con el estado de las tareas (Realizado, Atrasado, A tiempo) y comentarios breves.\n"
-        "9. Si el documento contiene diagramas de arquitectura (ej. en el Anexo Técnico), formatea el código en un bloque estricto de ```mermaid\n ... \n``` para su renderizado.\n"
+        "9. Si el documento contiene diagramas de arquitectura (ej. en el Anexo Técnico), formatea el código usando estrictamente sintaxis C4-PlantUML y envuélvelo en un bloque de código como ```c4plantuml\n@startuml\n!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml\n ... \n@enduml\n``` detallando el nivel de detalle requerido (contexto o contenedores o componentes).\n"
         "10. Incluye un encabezado con metadatos (título, ID de proyecto, fecha).\n"
         "11. Si se proporciona el perfil del banco (fuente de la verdad), úsalo para "
         "    contextualizar el documento con información real sobre la arquitectura, "
@@ -319,38 +319,103 @@ def draft_content(state: WorkflowState) -> dict[str, Any]:
             f"```json\n{json.dumps(bank_profile_data, indent=2, default=str, ensure_ascii=False)}\n```"
         )
 
-    user_prompt = (
-        f"**Esqueleto del documento:**\n```json\n{json.dumps(skeleton, indent=2, default=str)}\n```\n\n"
-        f"**Contexto del banco:**\n```json\n{json.dumps(bank_data, indent=2, default=str)}\n```\n\n"
-        f"**Contexto del proyecto:**\n```json\n{json.dumps(project_data, indent=2, default=str)}\n```\n\n"
-        f"**Personal:**\n```json\n{json.dumps(personnel_data, indent=2, default=str)}\n```"
-        + profile_block +
-        "\n\nRedacta el documento Markdown completo ahora. Responde ÚNICAMENTE con el contenido Markdown en español."
-        + revision_note
-    )
-
     client = get_llm_client("anthropic", enable_thinking=True)
-    markdown = client.generate(
-        messages=[{"role": "user", "content": user_prompt}],
-        system=system_prompt,
-        max_tokens=16000,
-    )
+    
+    # Special handling for technical_annex with multiple sub-documents
+    if doc_type == "technical_annex":
+        sub_docs = skeleton.get("sub_documents", [])
+        combined_markdown = ""
+        merged_usage = state.get("token_usage", {})
+        
+        logger.info(f"Drafting {len(sub_docs)} sub-documents for technical_annex")
 
-    # Claude sometimes wraps the entire response in a ```markdown ... ``` code fence.
-    # Strip it so the content is processed as plain Markdown, not a code block.
-    markdown = re.sub(r"^\s*```[a-zA-Z]*\s*\n", "", markdown)
-    markdown = re.sub(r"\n```\s*$", "", markdown)
-    markdown = markdown.strip()
+        for i, sub_doc in enumerate(sub_docs):
+            sub_title = sub_doc.get("title", f"Anexo {i+1}")
+            logger.info(f"Drafting sub-document: {sub_title}")
+            
+            # Create a specific prompt for this sub-document
+            # We construct a mini-skeleton context
+            sub_context = {
+                "metadata": skeleton.get("metadata", {}),
+                "specific_content": sub_doc,
+                "common_references": skeleton.get("references", [])
+            }
+            # Update title in metadata for this part
+            sub_context["metadata"]["title"] = sub_title
 
-    # Merge token usage
-    prev_usage = state.get("token_usage", {})
-    new_usage = client.usage.summary()
-    merged_usage = {
-        "prompt_tokens": prev_usage.get("prompt_tokens", 0) + new_usage["prompt_tokens"],
-        "completion_tokens": prev_usage.get("completion_tokens", 0) + new_usage["completion_tokens"],
-        "total_tokens": prev_usage.get("total_tokens", 0) + new_usage["total_tokens"],
-        "total_calls": prev_usage.get("total_calls", 0) + new_usage["total_calls"],
-    }
+            sub_user_prompt = (
+                f"**Esqueleto del documento específico ({sub_title}):**\n```json\n{json.dumps(sub_context, indent=2, default=str)}\n```\n\n"
+                f"**Contexto del banco:**\n```json\n{json.dumps(bank_data, indent=2, default=str)}\n```\n\n"
+                f"**Contexto del proyecto:**\n```json\n{json.dumps(project_data, indent=2, default=str)}\n```\n\n"
+                f"**Personal:**\n```json\n{json.dumps(personnel_data, indent=2, default=str)}\n```"
+                + profile_block +
+                "\n\nRedacta ESTE documento específico (Anexo Técnico) en Markdown. Se detallado y técnico. Responde ÚNICAMENTE con el contenido Markdown en español."
+                + revision_note
+            )
+
+            part_markdown = client.generate(
+                messages=[{"role": "user", "content": sub_user_prompt}],
+                system=system_prompt,
+                max_tokens=8000, # Lower limit per doc
+            )
+
+            # Cleanup
+            part_markdown = re.sub(r"^\s*```[a-zA-Z]*\s*\n", "", part_markdown)
+            part_markdown = re.sub(r"\n```\s*$", "", part_markdown)
+            part_markdown = part_markdown.strip()
+
+            # Add separator
+            # We use a special separator that main.py can recognize to split files
+            # Format: ===SPLIT_MARKER:Filename_Suffix===
+            # We derive suffix from title or usage
+            safe_suffix = re.sub(r'[\\/*?:"<>| ]', "_", sub_title)
+            combined_markdown += f"\n\n===SPLIT_MARKER:{safe_suffix}===\n\n"
+            combined_markdown += part_markdown
+
+            # Accumulate token usage
+            new_usage = client.usage.summary()
+            merged_usage = {
+                "prompt_tokens": merged_usage.get("prompt_tokens", 0) + new_usage["prompt_tokens"],
+                "completion_tokens": merged_usage.get("completion_tokens", 0) + new_usage["completion_tokens"],
+                "total_tokens": merged_usage.get("total_tokens", 0) + new_usage["total_tokens"],
+                "total_calls": merged_usage.get("total_calls", 0) + new_usage["total_calls"],
+            }
+        
+        markdown = combined_markdown
+    
+    else:
+        # Standard single document flow
+        user_prompt = (
+            f"**Esqueleto del documento:**\n```json\n{json.dumps(skeleton, indent=2, default=str)}\n```\n\n"
+            f"**Contexto del banco:**\n```json\n{json.dumps(bank_data, indent=2, default=str)}\n```\n\n"
+            f"**Contexto del proyecto:**\n```json\n{json.dumps(project_data, indent=2, default=str)}\n```\n\n"
+            f"**Personal:**\n```json\n{json.dumps(personnel_data, indent=2, default=str)}\n```"
+            + profile_block +
+            "\n\nRedacta el documento Markdown completo ahora. Responde ÚNICAMENTE con el contenido Markdown en español."
+            + revision_note
+        )
+
+        markdown = client.generate(
+            messages=[{"role": "user", "content": user_prompt}],
+            system=system_prompt,
+            max_tokens=16000,
+        )
+
+        # Claude sometimes wraps the entire response in a ```markdown ... ``` code fence.
+        # Strip it so the content is processed as plain Markdown, not a code block.
+        markdown = re.sub(r"^\s*```[a-zA-Z]*\s*\n", "", markdown)
+        markdown = re.sub(r"\n```\s*$", "", markdown)
+        markdown = markdown.strip()
+
+        # Merge token usage
+        prev_usage = state.get("token_usage", {})
+        new_usage = client.usage.summary()
+        merged_usage = {
+            "prompt_tokens": prev_usage.get("prompt_tokens", 0) + new_usage["prompt_tokens"],
+            "completion_tokens": prev_usage.get("completion_tokens", 0) + new_usage["completion_tokens"],
+            "total_tokens": prev_usage.get("total_tokens", 0) + new_usage["total_tokens"],
+            "total_calls": prev_usage.get("total_calls", 0) + new_usage["total_calls"],
+        }
 
     return {
         "markdown": markdown,

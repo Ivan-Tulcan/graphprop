@@ -122,9 +122,11 @@ class PDFRenderer:
                 data_uri = f"data:image/png;base64,{b64_img}"
                 
                 # Return standard HTML <img> tag
+                # Note: 'height: auto' can cause layout errors in xhtml2pdf (NoneType comparisons),
+                # so we use a fixed width or just let it scale naturally.
                 return (
                     f'\n<div class="diagram-render" style="text-align: center; margin: 20px 0;">\n'
-                    f'  <img src="{data_uri}" alt="{diag_type} Diagram" style="max-width: 100%; height: auto;" />\n'
+                    f'  <img src="{data_uri}" alt="{diag_type} Diagram" style="width: 100%;" />\n'
                     f'</div>\n'
                 )
             except Exception as exc:

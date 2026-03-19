@@ -163,15 +163,50 @@ def generate(
                 # Render PDF
                 from datetime import datetime
                 ts = datetime.now().strftime("%Y%m%d")
-                filename = f"{_sanitize(p_name)}_{doc_type.upper()}_{ts}"
+                base_filename = f"{_sanitize(p_name)}_{doc_type.upper()}_{ts}"
                 if count > 1:
-                    filename += f"_{i:03d}"
-                pdf_path = renderer.render(
-                    markdown=final_md,
-                    filename=filename,
-                    metadata=xmp_metadata,
-                )
-                generated_files.append(pdf_path)
+                    base_filename += f"_{i:03d}"
+
+                # Check for multiple sub-documents (split markers)
+                split_pattern = r"===SPLIT_MARKER:(.*?)==="
+                parts = re.split(split_pattern, final_md)
+
+                if len(parts) > 1:
+                    # Multi-document generation
+                    # format: [preamble, marker1, content1, marker2, content2, ...]
+                    start_idx = 1 if not parts[0].strip() else 0
+                    
+                    for j in range(start_idx, len(parts), 2):
+                        if j + 1 >= len(parts):
+                            break
+                        
+                        suffix = parts[j].strip()
+                        content = parts[j+1].strip()
+                        if not content:
+                            continue
+
+                        # Clean up suffix for filename
+                        safe_suffix = _sanitize(suffix).replace(" ", "_")
+                        sub_filename = f"{base_filename}_{safe_suffix}"
+                        
+                        # Update metadata title for this sub-document
+                        sub_metadata = xmp_metadata.copy()
+                        sub_metadata["title"] = f"{xmp_metadata['title']} - {suffix}"
+
+                        pdf_path = renderer.render(
+                            markdown=content,
+                            filename=sub_filename,
+                            metadata=sub_metadata,
+                        )
+                        generated_files.append(pdf_path)
+                else:
+                    # Standard single document generation
+                    pdf_path = renderer.render(
+                        markdown=final_md,
+                        filename=base_filename,
+                        metadata=xmp_metadata,
+                    )
+                    generated_files.append(pdf_path)
 
                 # Report token usage
                 usage = result.get("token_usage", {})
